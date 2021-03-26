@@ -1,13 +1,20 @@
 use lazy_static::lazy_static;
 use maplit::hashmap;
 use regex::Regex;
-use serenity::{Client, async_trait, framework::{
+use serenity::{
+    async_trait,
+    framework::{
         standard::{
             macros::{command, group},
             Args, CommandResult,
         },
         StandardFramework,
-    }, model::{channel::Message, prelude::Ready}, prelude::*, utils::MessageBuilder};
+    },
+    model::{channel::Message, prelude::Ready},
+    prelude::*,
+    utils::MessageBuilder,
+    Client,
+};
 use std::{collections::HashMap, error::Error, path::PathBuf};
 use tokio::process::Command;
 
@@ -96,15 +103,20 @@ async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         .arg("-seed")
         .arg(&seed)
         .spawn()?
-        .wait().await?;
+        .wait()
+        .await?;
 
     // Send the resultant picture to Discord
-    let output_filename: PathBuf = format!("./CaveGen/output/{}/{}.png", &sublevel, &seed[2..]).into();
-    msg.channel_id.send_files(&ctx.http, vec![&output_filename], |m|{m.content(format!("{} {}", sublevel, seed))}).await?;
+    let output_filename: PathBuf =
+        format!("./CaveGen/output/{}/{}.png", &sublevel, &seed[2..]).into();
+    msg.channel_id
+        .send_files(&ctx.http, vec![&output_filename], |m| {
+            m.content(format!("{} {}", sublevel, seed))
+        })
+        .await?;
 
     Ok(())
 }
-
 
 fn sublevel_valid(sublevel: &str) -> bool {
     if let Some((cave, level)) = sublevel.split_once('-') {
