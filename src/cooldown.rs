@@ -15,12 +15,21 @@ pub async fn check_cooldown(command: &str, ctx: &Context, msg: &Message) -> bool
     let command_key = command_key(command, msg);
     let cooldowns = cooldown_lock.read().await;
     if let Some(last_time) = cooldowns.get(&command_key) {
-        if last_time.elapsed().unwrap().as_secs() < 600u64 {
+        let elapsed_seconds = last_time.elapsed().unwrap().as_secs();
+        let is_dm = msg.is_private();
+
+        if !is_dm && elapsed_seconds < 600u64 {
             false
-        } else {
+        }
+        // Short cooldown for DMs to avoid spamming
+        else if is_dm && elapsed_seconds < 5u64 {
+            false
+        }
+        else {
             true
         }
-    } else {
+    }
+    else {
         true
     }
 }
