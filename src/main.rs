@@ -1,8 +1,11 @@
 #![feature(entry_insert)]
 
-mod validators;
 mod cavegen;
+mod cooldown;
+mod validators;
 
+use cavegen::{clean_output_dir, invoke_cavegen};
+use cooldown::{check_cooldown, update_cooldown};
 use serenity::{
     async_trait,
     framework::{
@@ -14,12 +17,10 @@ use serenity::{
     },
     model::{channel::Message, prelude::Ready},
     prelude::*,
-    utils::MessageBuilder,
     Client,
 };
 use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc, time::SystemTime};
-use validators::{sublevel_valid, seed_valid};
-use cavegen::{invoke_cavegen, clean_output_dir};
+use validators::{seed_valid, sublevel_valid};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -63,83 +64,54 @@ impl EventHandler for Handler {
     }
 }
 
-struct CooldownTimer;
+pub struct CooldownTimer;
 impl TypeMapKey for CooldownTimer {
     type Value = Arc<RwLock<HashMap<String, SystemTime>>>;
 }
 
 #[hook]
 async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
-    println!("Running command '{}' invoked by '{}'", command_name, msg.author.tag());
+    let can_run = check_cooldown(command_name, ctx, msg).await;
 
-    let cooldown_lock = {
-        let data_read = ctx.data.read().await;
-        data_read.get::<CooldownTimer>().expect("Expected CooldownTimer in TypeMap.").clone()
-    };
-
-    {
-        // Check when this user last used Cavegen
-        let cooldowns = cooldown_lock.read().await;
-        if let Some(last_time) = cooldowns.get(&msg.author.tag()) {
-            if last_time.elapsed().unwrap().as_secs() < 600u64 {
-                msg.channel_id.say(&ctx.http,
-                    "You're using Cavegen too often :( \
-                    Please wait a little while before trying again."
-                ).await.expect("Couldn't send error message");
-                return false;
-            }
-        }
-
-        // Check when the last overall invocation of Cavegen was
-        if let Some(last_use) = cooldowns.values().max() {
-            if last_use.elapsed().unwrap().as_secs() < 120u64 {
-                msg.channel_id.say(&ctx.http,
-                    "Cavegen was used too recently! Please wait \
-                    a little while before trying again."
-                ).await.expect("Couldn't send error message");
-                return false;
-            }
-        }
+    if can_run {
+        println!(
+            "Received command '{}' invoked by '{}'",
+            command_name,
+            msg.author.tag()
+        );
+    } else {
+        msg.channel_id
+            .say(
+                &ctx.http,
+                format!(
+                    ":x: !{} was run too recently. Please wait a while before trying again!",
+                    command_name
+                ),
+            )
+            .await
+            .unwrap();
     }
 
-    // Update the cooldown timer
-    {
-        let mut cooldowns = cooldown_lock.write().await;
-        cooldowns.entry(msg.author.tag()).insert(SystemTime::now());
-    }
-
-    true
+    can_run
 }
 
 #[command]
 async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    // Validate the arguments: expects '!cavegen <sublevel> <seed>'
+    const ERROR_MESSAGE: &str =
+        ":x: Usage: `!cavegen <sublevel> <seed>`.\nExample: `!cavegen SCx-7 0x1234ABCD`.";
+
+    // Validate the arguments
     if args.len() != 2 {
-        msg.channel_id.say(&ctx.http, ":x: Usage: `!cavegen <sublevel> <seed>`.").await?;
+        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
         return Err("!cavegen requires 2 arguments.".into());
     }
 
-    let mut error_message = MessageBuilder::new();
     let sublevel: String = args.single()?;
     let seed: String = args.single()?;
 
-    if !sublevel_valid(&sublevel) {
-        error_message.push_line(
-            "Error: couldn't parse sublevel. Make sure there's a \
-            dash between the cave and the floor, like 'SCx-6'."
-        );
-    }
-    if !seed_valid(&seed) {
-        error_message.push_line(
-            "Error: couldn't parse seed. Make sure it starts with \
-            '0x' and has exactly 8 characters from 0-9 and A-F afterwards."
-        );
-    }
-
-    let error_message = error_message.build();
-    if error_message.len() > 0 {
-        msg.channel_id.say(&ctx.http, error_message).await?;
-        return Err("Invalid input to !cavegen".into());
+    if !sublevel_valid(&sublevel) || !seed_valid(&seed) {
+        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
+        return Err("!cavegen arguments malformatted.".into());
     }
 
     // Now that we know the arguments are good, invoke Cavegen with them
@@ -156,6 +128,9 @@ async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 
     // Clean up after ourselves
     clean_output_dir().await;
+
+    // Update the cooldown timer.
+    update_cooldown("cavegen", ctx, msg).await;
 
     Ok(())
 }
