@@ -47,12 +47,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[group]
 #[allowed_roles("Runner", "Score Attacker", "Discord Mod")]
-#[commands(cavegen)]
+#[commands(cavegen, caveinfo)]
 struct General;
 
 #[group]
 #[only_in(dms)]
-#[commands(cavegen)]
+#[commands(cavegen, caveinfo)]
 struct Dms;
 
 struct Handler;
@@ -131,6 +131,44 @@ async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 
     // Update the cooldown timer.
     update_cooldown("cavegen", ctx, msg).await;
+
+    Ok(())
+}
+
+#[command]
+async fn caveinfo(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    const ERROR_MESSAGE: &str = ":x: Usage: `!caveinfo <sublevel>`.\nExample: `!cavegen SCx-7`.";
+
+    // Validate the arguments
+    if args.len() != 1 {
+        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
+        return Err("!caveinfo requires only 1 argument.".into());
+    }
+
+    let sublevel: String = args.single()?;
+    if !sublevel_valid(&sublevel) {
+        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
+        return Err("!caveinfo argument malformatted.".into());
+    }
+
+    // Now that we know the arguments are good, invoke Cavegen with them
+    invoke_cavegen(&format!("cave {} -caveInfoReport", &sublevel))
+        .await
+        .unwrap();
+
+    // Send the resultant picture to Discord
+    let output_filename: PathBuf = format!("./CaveGen/output/!caveinfo/{}.png", &sublevel).into();
+    msg.channel_id
+        .send_files(&ctx.http, vec![&output_filename], |m| {
+            m.content(format!("Caveinfo for {}", sublevel))
+        })
+        .await?;
+
+    // Clean up after ourselves
+    clean_output_dir().await;
+
+    // Update the cooldown timer.
+    update_cooldown("caveinfo", ctx, msg).await;
 
     Ok(())
 }

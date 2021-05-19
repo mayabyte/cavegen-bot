@@ -24,12 +24,10 @@ pub async fn check_cooldown(command: &str, ctx: &Context, msg: &Message) -> bool
         // Short cooldown for DMs to avoid spamming
         else if is_dm && elapsed_seconds < 5u64 {
             false
-        }
-        else {
+        } else {
             true
         }
-    }
-    else {
+    } else {
         true
     }
 }
