@@ -4,7 +4,7 @@ mod cavegen;
 mod cooldown;
 mod validators;
 
-use cavegen::{clean_output_dir, invoke_cavegen};
+use cavegen::{clean_output_dir, invoke_cavegen, normalize_sublevel_id};
 use cooldown::{check_cooldown, update_cooldown};
 use serenity::{
     async_trait,
@@ -20,7 +20,7 @@ use serenity::{
     Client,
 };
 use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc, time::SystemTime};
-use validators::{seed_valid, sublevel_valid};
+use validators::seed_valid;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -106,12 +106,17 @@ async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         return Err("!cavegen requires 2 arguments.".into());
     }
 
-    let sublevel: String = args.single()?;
-    let seed: String = args.single()?;
+    let sublevel: String = if let Some(sublevel) = normalize_sublevel_id(&args.single::<String>()?) {
+        sublevel
+    } else {
+        msg.channel_id.say(&ctx.http, "Unknown or invalid sublevel.").await?;
+        return Err("Unknown or invalid sublevel.".into());
+    };
 
-    if !sublevel_valid(&sublevel) || !seed_valid(&seed) {
-        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
-        return Err("!cavegen arguments malformatted.".into());
+    let seed: String = args.single()?;
+    if !seed_valid(&seed) {
+        msg.channel_id.say(&ctx.http, "Invalid seed.").await?;
+        return Err("Invalid seed.".into());
     }
 
     // Now that we know the arguments are good, invoke Cavegen with them
@@ -137,7 +142,7 @@ async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 
 #[command]
 async fn caveinfo(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    const ERROR_MESSAGE: &str = ":x: Usage: `!caveinfo <sublevel>`.\nExample: `!cavegen SCx-7`.";
+    const ERROR_MESSAGE: &str = ":x: Usage: `!caveinfo <sublevel> [-251]`.\nExample: `!cavegen SCx-7`.";
 
     // Validate the arguments
     if args.len() != 1 {
@@ -145,11 +150,12 @@ async fn caveinfo(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         return Err("!caveinfo requires only 1 argument.".into());
     }
 
-    let sublevel: String = args.single()?;
-    if !sublevel_valid(&sublevel) {
-        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
-        return Err("!caveinfo argument malformatted.".into());
-    }
+    let sublevel: String = if let Some(sublevel) = normalize_sublevel_id(&args.single::<String>()?) {
+        sublevel
+    } else {
+        msg.channel_id.say(&ctx.http, "Unknown or invalid sublevel.").await?;
+        return Err("Unknown or invalid sublevel.".into());
+    };
 
     // Now that we know the arguments are good, invoke Cavegen with them
     invoke_cavegen(&format!("cave {} -caveInfoReport", &sublevel))
