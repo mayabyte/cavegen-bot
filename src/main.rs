@@ -1,10 +1,10 @@
 #![feature(entry_insert)]
 
+mod args;
 mod cavegen;
 mod cooldown;
-mod validators;
 
-use cavegen::{clean_output_dir, invoke_cavegen, normalize_sublevel_id};
+use cavegen::{clean_output_dir, run_cavegen, run_caveinfo};
 use cooldown::{check_cooldown, update_cooldown};
 use serenity::{
     async_trait,
@@ -19,8 +19,9 @@ use serenity::{
     prelude::*,
     Client,
 };
-use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc, time::SystemTime};
-use validators::seed_valid;
+use std::{collections::HashMap, error::Error, sync::Arc, time::SystemTime};
+
+use crate::args::extract_standard_args;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -46,14 +47,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[group]
-#[allowed_roles("Runner", "Score Attacker", "Discord Mod")]
 #[commands(cavegen, caveinfo)]
 struct General;
-
-#[group]
-#[only_in(dms)]
-#[commands(cavegen, caveinfo)]
-struct Dms;
 
 struct Handler;
 
@@ -64,6 +59,8 @@ impl EventHandler for Handler {
     }
 }
 
+/// Cooldown timer for commands that call into Cavegen.
+/// Prevents spam and avoids overloading the host machine.
 pub struct CooldownTimer;
 impl TypeMapKey for CooldownTimer {
     type Value = Arc<RwLock<HashMap<String, SystemTime>>>;
@@ -96,40 +93,40 @@ async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
 }
 
 #[command]
-async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    const ERROR_MESSAGE: &str =
-        ":x: Usage: `!cavegen <sublevel> <seed>`.\nExample: `!cavegen SCx-7 0x1234ABCD`.";
+async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let args = extract_standard_args(args);
 
-    // Validate the arguments
-    if args.len() != 2 {
-        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
-        return Err("!cavegen requires 2 arguments.".into());
+    if args.get("help").is_some() {
+        msg.channel_id.say(
+            &ctx.http,
+            "**Usage: `!cavegen <cave specifier> <seed> [+251] [+score] [+jp]`.**\n\
+            Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., challenge mode sublevels: \"CH3-1\" (the dash is required), \
+            or the word \"colossal\" to generate a CC layout.\n\
+            Seeds must start with `0x`: `0x1234abcd`.\n\
+            Include `+score` in your message to draw score related info.\n\
+            Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
+            Include `+251` in your message to generate Pikmin 251 caves."
+        ).await?;
+        return Ok(());
     }
 
-    let sublevel: String = if let Some(sublevel) = normalize_sublevel_id(&args.single::<String>()?) {
-        sublevel
-    } else {
-        msg.channel_id.say(&ctx.http, "Unknown or invalid sublevel.").await?;
-        return Err("Unknown or invalid sublevel.".into());
-    };
-
-    let seed: String = args.single()?;
-    if !seed_valid(&seed) {
-        msg.channel_id.say(&ctx.http, "Invalid seed.").await?;
-        return Err("Invalid seed.".into());
+    match run_cavegen(&args).await {
+        Ok(output_file) => {
+            msg.channel_id
+                .send_files(&ctx.http, vec![&output_file], |m| {
+                    m.content(format!(
+                        "{} {}",
+                        args.get("cave").unwrap(),
+                        args.get("seed").unwrap()
+                    ))
+                })
+                .await?;
+        }
+        Err(err) => {
+            msg.channel_id.say(&ctx.http, err.to_string()).await?;
+            eprintln!("{:#?}", err);
+        }
     }
-
-    // Now that we know the arguments are good, invoke Cavegen with them
-    invoke_cavegen(&format!("cave {} -seed {}", &sublevel, &seed)).await?;
-
-    // Send the resultant picture to Discord
-    let output_filename: PathBuf =
-        format!("./CaveGen/output/{}/{}.png", &sublevel, &seed[2..]).into();
-    msg.channel_id
-        .send_files(&ctx.http, vec![&output_filename], |m| {
-            m.content(format!("{} {}", sublevel, seed))
-        })
-        .await?;
 
     // Clean up after ourselves
     clean_output_dir().await;
@@ -141,34 +138,34 @@ async fn cavegen(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 }
 
 #[command]
-async fn caveinfo(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    const ERROR_MESSAGE: &str = ":x: Usage: `!caveinfo <sublevel> [-251]`.\nExample: `!cavegen SCx-7`.";
+async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let args = extract_standard_args(args);
 
-    // Validate the arguments
-    if args.len() != 1 {
-        msg.channel_id.say(&ctx.http, ERROR_MESSAGE).await?;
-        return Err("!caveinfo requires only 1 argument.".into());
+    if args.get("help").is_some() {
+        msg.channel_id.say(
+            &ctx.http,
+            "**Usage: `!caveinfo <cave specifier> [+251] [+jp]`.**\n\
+            Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., or challenge mode sublevels: \"CH3-1\" (the dash is required).\n\
+            Waypoints and spawn points are drawn by default.\n\
+            Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
+            Include `+251` in your message to show info for Pikmin 251 caves."
+        ).await?;
+        return Ok(());
     }
 
-    let sublevel: String = if let Some(sublevel) = normalize_sublevel_id(&args.single::<String>()?) {
-        sublevel
-    } else {
-        msg.channel_id.say(&ctx.http, "Unknown or invalid sublevel.").await?;
-        return Err("Unknown or invalid sublevel.".into());
-    };
-
-    // Now that we know the arguments are good, invoke Cavegen with them
-    invoke_cavegen(&format!("cave {} -caveInfoReport", &sublevel))
-        .await
-        .unwrap();
-
-    // Send the resultant picture to Discord
-    let output_filename: PathBuf = format!("./CaveGen/output/!caveinfo/{}.png", &sublevel).into();
-    msg.channel_id
-        .send_files(&ctx.http, vec![&output_filename], |m| {
-            m.content(format!("Caveinfo for {}", sublevel))
-        })
-        .await?;
+    match run_caveinfo(&args).await {
+        Ok(output_file) => {
+            msg.channel_id
+                .send_files(&ctx.http, vec![&output_file], |m| {
+                    m.content(format!("Caveinfo for {}", args.get("cave").unwrap()))
+                })
+                .await?;
+        }
+        Err(err) => {
+            msg.channel_id.say(&ctx.http, err.to_string()).await?;
+            eprintln!("{:#?}", err);
+        }
+    }
 
     // Clean up after ourselves
     clean_output_dir().await;

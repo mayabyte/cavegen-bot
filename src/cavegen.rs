@@ -1,15 +1,92 @@
-use tokio::process::Command;
-use lazy_static::lazy_static;
-use regex::Regex;
+use std::{collections::HashMap, error::Error, path::PathBuf};
+use tokio::{fs::File, process::Command};
 
-lazy_static! {
-    static ref SUBLEVEL_ID_RE: Regex = Regex::new(r"([[:alpha:]]{2,3})[_-]?(\d+)").unwrap();
-    static ref CAVES: [&'static str; 14] = [
-        "EC", "SCx", "FC", "HoB", "WFG", "SH", "BK", "CoS", "GK", "SC", "SR", "CoC", "DD", "HoH"
-    ];
+pub async fn run_cavegen(
+    args: &HashMap<&'static str, String>,
+) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+    let cave = args
+        .get("cave")
+        .ok_or_else(|| "No valid cave/sublevel specifier was provided.")?;
+    let seed = args.get("seed").ok_or_else(|| "No valid seed specified.")?;
+
+    let mut extra_args = vec![];
+    if args.get("251").is_some() {
+        extra_args.push("-251");
+    }
+    if args.get("draw_score").is_some() {
+        extra_args.push("-drawAllScores");
+    }
+    if let Some(region) = args.get("region") {
+        extra_args.push("-region");
+        extra_args.push(region);
+    }
+
+    invoke_cavegen_jar(&format!(
+        "cave {} -seed {} -drawNoGateLife {}",
+        &cave,
+        &seed,
+        extra_args.join(" ")
+    ))
+    .await?;
+
+    let cave_output_folder = {
+        if cave == "colossal" {
+            "./CaveGen/output/colossal-1".to_string()
+        } else if args.get("251").is_some() {
+            format!("./CaveGen/output251/{}", cave)
+        } else {
+            format!("./CaveGen/output/{}", cave)
+        }
+    };
+
+    let output_file: PathBuf = format!("{}/{}.png", &cave_output_folder, &seed[2..]).into();
+    if let Err(_) = File::open(&output_file).await {
+        Err("Cavegen failed! This is probably a bug :(".into())
+    } else {
+        Ok(output_file)
+    }
 }
 
-pub async fn invoke_cavegen(args: &str) -> std::io::Result<String> {
+pub async fn run_caveinfo(
+    args: &HashMap<&'static str, String>,
+) -> Result<PathBuf, Box<dyn Error + Send + Sync>> {
+    let cave = args
+        .get("cave")
+        .ok_or_else(|| "No valid cave/sublevel specifier was provided.")?;
+    let mut extra_args = vec![];
+    if args.get("251").is_some() {
+        extra_args.push("-251");
+    }
+    if let Some(region) = args.get("region") {
+        extra_args.push("-region");
+        extra_args.push(region);
+    }
+
+    invoke_cavegen_jar(&format!(
+        "cave {} -caveInfoReport -drawAllWayPoints -drawSpawnPoints {}",
+        &cave,
+        extra_args.join(" ")
+    ))
+    .await?;
+
+    let output_file = {
+        if args.get("251").is_some() {
+            format!("./CaveGen/output251/!caveinfo/{}.png", cave)
+        } else {
+            format!("./CaveGen/output/!caveinfo/{}.png", cave)
+        }
+    }
+    .into();
+
+    if let Err(_) = File::open(&output_file).await {
+        Err("Cavegen failed! This is probably a bug :(".into())
+    } else {
+        Ok(output_file)
+    }
+}
+
+async fn invoke_cavegen_jar(args: &str) -> std::io::Result<String> {
+    let args = args.trim();
     let output = Command::new("java")
         .current_dir("./CaveGen")
         .arg("-jar")
@@ -26,17 +103,8 @@ pub async fn clean_output_dir() {
     Command::new("rm")
         .arg("-rf")
         .arg("./CaveGen/output")
+        .arg("./CaveGen/output251")
         .output()
         .await
         .expect("Failed to delete Cavegen output dir");
-}
-
-pub fn normalize_sublevel_id(raw: &str) -> Option<String> {
-    let captures = SUBLEVEL_ID_RE.captures(raw)?;
-    let cave_name = captures.get(1)?.as_str();
-    let sublevel = captures.get(2)?.as_str();
-
-    let cave_name_normalized = CAVES.iter()
-        .find(|cave| cave_name.eq_ignore_ascii_case(cave))?;
-    Some(format!("{}-{}", cave_name_normalized, sublevel))
 }
