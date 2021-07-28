@@ -39,7 +39,7 @@ pub async fn run_cavegen(
         }
     };
 
-    let output_file: PathBuf = format!("{}/{}.png", &cave_output_folder, &seed[2..]).into();
+    let output_file: PathBuf = format!("{}/{}.png", &cave_output_folder, &seed[2..].to_ascii_uppercase()).into();
     if let Err(_) = File::open(&output_file).await {
         Err("Cavegen failed! This is probably a bug :(".into())
     } else {
