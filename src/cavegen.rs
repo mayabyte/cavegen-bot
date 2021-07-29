@@ -22,7 +22,7 @@ pub async fn run_cavegen(
     }
 
     invoke_cavegen_jar(&format!(
-        "cave {} -seed {} -drawNoGateLife {}",
+        "cave {} -seed {} -drawNoGateLife -quickglance {}",
         &cave,
         &seed,
         extra_args.join(" ")
