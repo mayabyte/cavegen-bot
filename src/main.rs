@@ -25,7 +25,7 @@ use crate::args::extract_standard_args;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let token = env!("DISCORD_TOKEN");
+    let token = include_str!("../discord_token.txt");
     let mut client = Client::builder(token)
         .framework(
             StandardFramework::new()
