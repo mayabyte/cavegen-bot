@@ -96,6 +96,7 @@ async fn invoke_cavegen_jar(args: &str) -> std::io::Result<String> {
         .await?;
     let stdout = std::str::from_utf8(output.stdout.as_slice())
         .expect("Java output was invalid UTF-8 when running Cavegen");
+    println!("{}", stdout.to_string());
     Ok(stdout.to_string())
 }
 
