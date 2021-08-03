@@ -13,6 +13,9 @@ pub async fn run_cavegen(
     if args.get("251").is_some() {
         extra_args.push("-251");
     }
+    else if args.get("new_year").is_some() {
+        extra_args.push("-newYear")
+    }
     if args.get("draw_score").is_some() {
         extra_args.push("-drawAllScores");
     }
@@ -56,6 +59,9 @@ pub async fn run_caveinfo(
     let mut extra_args = vec![];
     if args.get("251").is_some() {
         extra_args.push("-251");
+    }
+    else if args.get("new_year").is_some() {
+        extra_args.push("-newYear")
     }
     if let Some(region) = args.get("region") {
         extra_args.push("-region");

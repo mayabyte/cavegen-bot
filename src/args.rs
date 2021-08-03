@@ -7,10 +7,10 @@ lazy_static! {
     static ref HEX: Regex = Regex::new(r"0x[0-9A-Fa-f]{8}").unwrap();
     static ref SUBLEVEL_ID_RE: Regex = Regex::new(r"([[:alpha:]]{2,3})[_-]?(\d+)").unwrap();
     static ref CHALLENGE_MODE_ID_RE: Regex = Regex::new(r"[cC][hH]\d+[_-]\d+").unwrap();
-    static ref CAVES: [&'static str; 29] = [
+    static ref CAVES: [&'static str; 41] = [
         "EC", "SCx", "FC", "HoB", "WFG", "SH", "BK", "CoS", "GK", "SC", "SR", "CoC", "DD", "HoH",
         "AT", "IM", "AD", "GD", "FT", "WF", "GdD", "AS", "SS", "CK", "PoW", "PoM", "EA", "DD",
-        "PP",
+        "PP", "BG", "SK", "CwNN", "SnD", "CH", "RH", "SA", "AA", "TC", "ER", "CG", "SD"
     ];
 }
 
@@ -25,6 +25,8 @@ pub fn extract_standard_args(mut args: Args) -> HashMap<&'static str, String> {
             arg_map.insert("cave", cave);
         } else if arg == "+251" {
             arg_map.insert("251", "yes".to_string());
+        } else if arg.eq_ignore_ascii_case("+newyear") || arg.eq_ignore_ascii_case("+new_year") {
+            arg_map.insert("new_year", "yes".to_string());
         } else if arg.eq_ignore_ascii_case("+score") {
             arg_map.insert("draw_score", "yes".to_string());
         } else if arg.eq_ignore_ascii_case("+jp") || arg.eq_ignore_ascii_case("+jpn") {
