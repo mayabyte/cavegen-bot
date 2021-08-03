@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 lazy_static! {
     static ref HEX: Regex = Regex::new(r"0x[0-9A-Fa-f]{8}").unwrap();
-    static ref SUBLEVEL_ID_RE: Regex = Regex::new(r"([[:alpha:]]{2,3})[_-]?(\d+)").unwrap();
+    static ref SUBLEVEL_ID_RE: Regex = Regex::new(r"([[:alpha:]]{2,5})[_-]?(\d+)").unwrap();
     static ref CHALLENGE_MODE_ID_RE: Regex = Regex::new(r"[cC][hH]\d+[_-]\d+").unwrap();
     static ref CAVES: [&'static str; 41] = [
         "EC", "SCx", "FC", "HoB", "WFG", "SH", "BK", "CoS", "GK", "SC", "SR", "CoC", "DD", "HoH",
