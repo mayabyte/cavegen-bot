@@ -121,6 +121,7 @@ async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     ))
                 })
                 .await?;
+            update_cooldown("cavegen", ctx, msg).await;
         }
         Err(err) => {
             msg.channel_id.say(&ctx.http, err.to_string()).await?;
@@ -130,9 +131,6 @@ async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     // Clean up after ourselves
     clean_output_dir().await;
-
-    // Update the cooldown timer.
-    update_cooldown("cavegen", ctx, msg).await;
 
     Ok(())
 }
@@ -160,6 +158,7 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     m.content(format!("Caveinfo for {}", args.get("cave").unwrap()))
                 })
                 .await?;
+            update_cooldown("caveinfo", ctx, msg).await;
         }
         Err(err) => {
             msg.channel_id.say(&ctx.http, err.to_string()).await?;
@@ -169,9 +168,6 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     // Clean up after ourselves
     clean_output_dir().await;
-
-    // Update the cooldown timer.
-    update_cooldown("caveinfo", ctx, msg).await;
 
     Ok(())
 }
