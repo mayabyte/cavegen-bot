@@ -105,7 +105,8 @@ async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             Seeds must start with `0x`: `0x1234abcd`.\n\
             Include `+score` in your message to draw score related info.\n\
             Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
-            Include `+251` in your message to generate Pikmin 251 caves."
+            Include `+251` in your message to generate Pikmin 251 caves.\n\
+            Include `+newyear` in your message to generate Pikmin 2: New Year caves."
         ).await?;
         return Ok(());
     }
@@ -146,7 +147,8 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., or challenge mode sublevels: \"CH3-1\" (the dash is required).\n\
             Waypoints and spawn points are drawn by default.\n\
             Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
-            Include `+251` in your message to show info for Pikmin 251 caves."
+            Include `+251` in your message to show info for Pikmin 251 caves.\n\
+            Include `+newyear` in your message to show info for Pikmin 2: New Year caves."
         ).await?;
         return Ok(());
     }
