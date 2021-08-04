@@ -37,6 +37,8 @@ pub async fn run_cavegen(
             "./CaveGen/output/colossal-1".to_string()
         } else if args.get("251").is_some() {
             format!("./CaveGen/output251/{}", cave)
+        } else if args.get("new_year").is_some() {
+            format!("./CaveGen/outputNewYear/{}", cave)
         } else {
             format!("./CaveGen/output/{}", cave)
         }
@@ -78,6 +80,8 @@ pub async fn run_caveinfo(
     let output_file = {
         if args.get("251").is_some() {
             format!("./CaveGen/output251/!caveinfo/{}.png", cave)
+        } else if args.get("new_year").is_some() {
+            format!("./CaveGen/output/!caveinfo/{}.png", cave)
         } else {
             format!("./CaveGen/output/!caveinfo/{}.png", cave)
         }
