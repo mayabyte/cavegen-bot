@@ -81,7 +81,7 @@ pub async fn run_caveinfo(
         if args.get("251").is_some() {
             format!("./CaveGen/output251/!caveinfo/{}.png", cave)
         } else if args.get("new_year").is_some() {
-            format!("./CaveGen/output/!caveinfo/{}.png", cave)
+            format!("./CaveGen/outputNewYear/!caveinfo/{}.png", cave)
         } else {
             format!("./CaveGen/output/!caveinfo/{}.png", cave)
         }
