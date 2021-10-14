@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::framework::standard::Args;
 use std::collections::HashMap;
+use rand::random;
 
 lazy_static! {
     static ref HEX: Regex = Regex::new(r"0x[0-9A-Fa-f]{8}").unwrap();
@@ -21,6 +22,9 @@ pub fn extract_standard_args(mut args: Args) -> HashMap<&'static str, String> {
 
         if match_seed(&arg) {
             arg_map.insert("seed", arg);
+        } else if arg.eq_ignore_ascii_case("random") {
+            let random_seed: u32 = random();
+            arg_map.insert("seed", format!("0x{:08X}", random_seed));
         } else if let Some(cave) = match_cave_specifier(&arg) {
             arg_map.insert("cave", cave);
         } else if arg == "+251" {

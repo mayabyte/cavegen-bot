@@ -1,6 +1,6 @@
 [package]
 name = "cavegen_bot"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["mayabyte <mayahayden@protonmail.com>"]
 edition = "2018"
 
@@ -16,3 +16,4 @@ features = ["macros", "rt-multi-thread", "process"]
 maplit = "1.0"
 lazy_static = "1.4"
 regex = "1.4"
+rand = "0.8"
