@@ -2,5 +2,4 @@
 
 Simple bot to run Jhawk's excellent Cavegen tool from the convenience of a Discord channel.
 
-To build: set the `DISCORD_TOKEN` environment variable appropraitely and run `cargo build`.
-To run: `cargo run`.
+To run: create a `discord_token.txt` file in this directory with your Discord API token, then run `cargo run --release`.

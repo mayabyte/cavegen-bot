@@ -12,8 +12,7 @@ pub async fn run_cavegen(
     let mut extra_args = vec![];
     if args.get("251").is_some() {
         extra_args.push("-251");
-    }
-    else if args.get("new_year").is_some() {
+    } else if args.get("new_year").is_some() {
         extra_args.push("-newYear")
     }
     if args.get("draw_score").is_some() {
@@ -44,7 +43,12 @@ pub async fn run_cavegen(
         }
     };
 
-    let output_file: PathBuf = format!("{}/{}.png", &cave_output_folder, &seed[2..].to_ascii_uppercase()).into();
+    let output_file: PathBuf = format!(
+        "{}/{}.png",
+        &cave_output_folder,
+        &seed[2..].to_ascii_uppercase()
+    )
+    .into();
     if let Err(_) = File::open(&output_file).await {
         Err("Cavegen failed! This is probably a bug :(".into())
     } else {
@@ -61,8 +65,7 @@ pub async fn run_caveinfo(
     let mut extra_args = vec![];
     if args.get("251").is_some() {
         extra_args.push("-251");
-    }
-    else if args.get("new_year").is_some() {
+    } else if args.get("new_year").is_some() {
         extra_args.push("-newYear")
     }
     if let Some(region) = args.get("region") {

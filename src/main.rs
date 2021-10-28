@@ -3,6 +3,7 @@
 mod args;
 mod cavegen;
 mod cooldown;
+mod settings;
 
 use cavegen::{clean_output_dir, run_cavegen, run_caveinfo};
 use cooldown::{check_cooldown, update_cooldown};
@@ -19,7 +20,8 @@ use serenity::{
     prelude::*,
     Client,
 };
-use std::{collections::HashMap, error::Error, sync::Arc, time::SystemTime};
+use settings::NUM_TRACKED_COOLDOWNS;
+use std::{error::Error, sync::Arc, time::SystemTime};
 
 use crate::args::extract_standard_args;
 
@@ -38,7 +40,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     {
         let mut data = client.data.write().await;
-        data.insert::<CooldownTimer>(Arc::new(RwLock::new(HashMap::default())));
+        data.insert::<CooldownTimer>(Arc::new(RwLock::new(
+            [SystemTime::UNIX_EPOCH; NUM_TRACKED_COOLDOWNS],
+        )));
     }
 
     client.start().await?;
@@ -63,12 +67,12 @@ impl EventHandler for Handler {
 /// Prevents spam and avoids overloading the host machine.
 pub struct CooldownTimer;
 impl TypeMapKey for CooldownTimer {
-    type Value = Arc<RwLock<HashMap<String, SystemTime>>>;
+    type Value = Arc<RwLock<[SystemTime; NUM_TRACKED_COOLDOWNS]>>;
 }
 
 #[hook]
 async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
-    let can_run = check_cooldown(command_name, ctx, msg).await;
+    let can_run = check_cooldown(ctx, msg).await;
 
     if can_run {
         println!(
@@ -122,7 +126,7 @@ async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     ))
                 })
                 .await?;
-            update_cooldown("cavegen", ctx, msg).await;
+            update_cooldown(ctx).await;
         }
         Err(err) => {
             msg.channel_id.say(&ctx.http, err.to_string()).await?;
@@ -160,7 +164,7 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     m.content(format!("Caveinfo for {}", args.get("cave").unwrap()))
                 })
                 .await?;
-            update_cooldown("caveinfo", ctx, msg).await;
+            update_cooldown(ctx).await;
         }
         Err(err) => {
             msg.channel_id.say(&ctx.http, err.to_string()).await?;

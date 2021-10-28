@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
+use rand::random;
 use regex::Regex;
 use serenity::framework::standard::Args;
 use std::collections::HashMap;
-use rand::random;
 
 lazy_static! {
     static ref HEX: Regex = Regex::new(r"0x[0-9A-Fa-f]{8}").unwrap();
