@@ -8,8 +8,8 @@ lazy_static! {
     static ref HEX: Regex = Regex::new(r"0x[0-9A-Fa-f]{8}").unwrap();
     static ref SUBLEVEL_ID_RE: Regex = Regex::new(r"([[:alpha:]]{2,5})[_-]?(\d+)").unwrap();
     static ref CHALLENGE_MODE_ID_RE: Regex = Regex::new(r"[cC][hH]\d+[_-]\d+").unwrap();
-    static ref CAVES: [&'static str; 41] = [
-        "EC", "SCx", "FC", "HoB", "WFG", "SH", "BK", "CoS", "GK", "SC", "SR", "CoC", "DD", "HoH",
+    static ref CAVES: [&'static str; 42] = [
+        "EC", "SCx", "FC", "HoB", "WFG", "SH", "BK", "CoS", "GK", "SC", "SmC", "SR", "CoC", "DD", "HoH",
         "AT", "IM", "AD", "GD", "FT", "WF", "GdD", "AS", "SS", "CK", "PoW", "PoM", "EA", "DD",
         "PP", "BG", "SK", "CwNN", "SnD", "CH", "RH", "SA", "AA", "TC", "ER", "CG", "SD"
     ];
@@ -69,8 +69,15 @@ fn normalize_sublevel(raw: &str) -> Option<String> {
     let cave_name = captures.get(1)?.as_str();
     let sublevel = captures.get(2)?.as_str();
 
-    let cave_name_normalized = CAVES
+    let cave_name_normalized = *CAVES
         .iter()
         .find(|cave| cave_name.eq_ignore_ascii_case(cave))?;
+
+    // Handle alts
+    let cave_name_normalized = match cave_name_normalized {
+        "SmC" => "SC",
+        _ => cave_name_normalized,
+    };
+
     Some(format!("{}-{}", cave_name_normalized, sublevel))
 }
