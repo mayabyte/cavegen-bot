@@ -5,7 +5,7 @@ mod cavegen;
 mod cooldown;
 mod settings;
 
-use cavegen::{clean_output_dir, run_cavegen, run_caveinfo};
+use cavegen::{cleanup_output, run_cavegen, run_caveinfo};
 use cooldown::{check_cooldown, update_cooldown};
 use serenity::{
     async_trait,
@@ -127,15 +127,13 @@ async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 })
                 .await?;
             update_cooldown(ctx).await;
+            cleanup_output(&output_file).await;
         }
         Err(err) => {
             msg.channel_id.say(&ctx.http, err.to_string()).await?;
             eprintln!("{:#?}", err);
         }
     }
-
-    // Clean up after ourselves
-    clean_output_dir().await;
 
     Ok(())
 }
@@ -165,15 +163,13 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 })
                 .await?;
             update_cooldown(ctx).await;
+            cleanup_output(&output_file).await;
         }
         Err(err) => {
             msg.channel_id.say(&ctx.http, err.to_string()).await?;
             eprintln!("{:#?}", err);
         }
     }
-
-    // Clean up after ourselves
-    clean_output_dir().await;
 
     Ok(())
 }

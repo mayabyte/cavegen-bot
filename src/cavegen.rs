@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, path::PathBuf};
+use std::{collections::HashMap, error::Error, path::{Path, PathBuf}};
 use tokio::{fs::File, process::Command};
 
 pub async fn run_cavegen(
@@ -113,12 +113,11 @@ async fn invoke_cavegen_jar(args: &str) -> std::io::Result<String> {
     Ok(stdout.to_string())
 }
 
-pub async fn clean_output_dir() {
+pub async fn cleanup_output(path: &Path) {
     Command::new("rm")
         .arg("-rf")
-        .arg("./CaveGen/output")
-        .arg("./CaveGen/output251")
+        .arg(path)
         .output()
         .await
-        .expect("Failed to delete Cavegen output dir");
+        .expect("Failed to clean up Cavegen output");
 }
