@@ -103,14 +103,16 @@ async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if args.get("help").is_some() {
         msg.channel_id.say(
             &ctx.http,
-            "**Usage: `!cavegen <cave specifier> <seed> [+251] [+score] [+jp]`.**\n\
+            "**Usage: `!cavegen <cave specifier> <seed> [optional arguments]`.**\n\
             Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., challenge mode sublevels: \"CH3-1\" (the dash is required), \
             or the word \"colossal\" to generate a CC layout.\n\
             Seeds must start with `0x`: `0x1234abcd`.\n\
             Include `+score` in your message to draw score related info.\n\
+            Include `+paths` in your message to draw treasure carry paths.\n\
             Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
             Include `+251` in your message to generate Pikmin 251 caves.\n\
-            Include `+newyear` in your message to generate Pikmin 2: New Year caves."
+            Include `+newyear` in your message to generate Pikmin 2: New Year caves.\n\
+            Include `+pretty` in your message to draw 'pretty' layout images."
         ).await?;
         return Ok(());
     }
@@ -145,7 +147,7 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if args.get("help").is_some() {
         msg.channel_id.say(
             &ctx.http,
-            "**Usage: `!caveinfo <cave specifier> [+251] [+jp]`.**\n\
+            "**Usage: `!caveinfo <cave specifier> [optional arguments]`.**\n\
             Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., or challenge mode sublevels: \"CH3-1\" (the dash is required).\n\
             Waypoints and spawn points are drawn by default.\n\
             Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\

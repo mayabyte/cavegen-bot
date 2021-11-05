@@ -35,6 +35,10 @@ pub fn extract_standard_args(mut args: Args) -> HashMap<&'static str, String> {
             arg_map.insert("draw_score", "yes".to_string());
         } else if arg.eq_ignore_ascii_case("+jp") || arg.eq_ignore_ascii_case("+jpn") {
             arg_map.insert("region", "jpn".to_string());
+        } else if arg.eq_ignore_ascii_case("+paths") {
+            arg_map.insert("draw_paths", "yes".to_string());
+        } else if arg.eq_ignore_ascii_case("+pretty") {
+            arg_map.insert("pretty", "yes".to_string());
         }
         // There seems to be a bug in CaveGen itself that makes the PAL region option
         // behave the same as JP. For now this will be disabled.

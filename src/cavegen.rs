@@ -22,6 +22,12 @@ pub async fn run_cavegen(
         extra_args.push("-region");
         extra_args.push(region);
     }
+    if args.get("draw_paths").is_some() {
+        extra_args.push("-drawTreasurePaths");
+    }
+    if args.get("pretty").is_some() {
+        extra_args.push("-pretty");
+    }
 
     invoke_cavegen_jar(&format!(
         "cave {} -seed {} -drawNoGateLife -quickglance {}",
