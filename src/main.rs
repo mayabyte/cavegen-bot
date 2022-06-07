@@ -21,7 +21,7 @@ use serenity::{
     Client,
 };
 use settings::NUM_TRACKED_COOLDOWNS;
-use std::{error::Error, sync::Arc, time::SystemTime};
+use std::{error::Error, path::PathBuf, sync::Arc, time::SystemTime};
 
 use crate::args::extract_standard_args;
 
@@ -31,7 +31,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut client = Client::builder(token)
         .framework(
             StandardFramework::new()
-                .configure(|config| config.prefix("!"))
+                .configure(|config| {
+                    config.prefix("!")
+                    .on_mention(Some(824753467133657089.into())) // Respond to commands that @ the bot
+                })
                 .group(&GENERAL_GROUP)
                 .before(before),
         )
@@ -51,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[group]
-#[commands(cavegen, caveinfo)]
+#[commands(cavegen, caveinfo, pspspsps)]
 struct General;
 
 struct Handler;
@@ -173,5 +176,13 @@ async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         }
     }
 
+    Ok(())
+}
+
+#[command]
+async fn pspspsps(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    if &format!("{}#{}", msg.author.name, msg.author.discriminator) == "chemical#7290" {
+        msg.channel_id.send_files(&ctx.http, vec![&PathBuf::from("./assets/fast_gbb.gif")], |m| m).await?;
+    }
     Ok(())
 }
