@@ -1,5 +1,3 @@
-#![feature(entry_insert)]
-
 mod args;
 mod cavegen;
 mod cooldown;
