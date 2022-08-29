@@ -12,3 +12,4 @@ features = ["macros", "rt-multi-thread"]
 poise = "0.3"
 caveripper = { git = "https://github.com/mayabyte/caveripper" }
 rand = "0.8"
+rayon = "1.5"
