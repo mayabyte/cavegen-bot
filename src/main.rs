@@ -1,186 +1,122 @@
-mod args;
-mod cavegen;
-mod cooldown;
-mod settings;
+use caveripper::{parse_seed, sublevel::Sublevel, layout::{render::{render_caveinfo, RenderOptions, save_image, render_layout}, Layout}};
+use poise::{Framework, FrameworkOptions, serenity_prelude::{GatewayIntents, AttachmentType}, command, FrameworkBuilder, PrefixFrameworkOptions, samples::register_application_commands_buttons};
+use std::{path::PathBuf, convert::TryInto};
 
-use cavegen::{cleanup_output, run_cavegen, run_caveinfo};
-use cooldown::{check_cooldown, update_cooldown};
-use serenity::{
-    async_trait,
-    framework::{
-        standard::{
-            macros::{command, group, hook},
-            Args, CommandResult,
-        },
-        StandardFramework,
-    },
-    model::{channel::Message, prelude::Ready},
-    prelude::*,
-    Client,
-};
-use settings::NUM_TRACKED_COOLDOWNS;
-use std::{error::Error, path::PathBuf, sync::Arc, time::SystemTime};
+struct Data {}
 
-use crate::args::extract_standard_args;
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let token = include_str!("../discord_token.txt");
-    let mut client = Client::builder(token)
-        .framework(
-            StandardFramework::new()
-                .configure(|config| {
-                    config.prefix("!")
-                    .on_mention(Some(824753467133657089.into())) // Respond to commands that @ the bot
-                })
-                .group(&GENERAL_GROUP)
-                .before(before),
-        )
-        .event_handler(Handler)
-        .await?;
+async fn main() -> Result<(), Error> {
+    let token = tokio::fs::read_to_string("discord_token.txt").await?.trim().to_string();
 
-    {
-        let mut data = client.data.write().await;
-        data.insert::<CooldownTimer>(Arc::new(RwLock::new(
-            [SystemTime::UNIX_EPOCH; NUM_TRACKED_COOLDOWNS],
-        )));
-    }
+    let framework: FrameworkBuilder<_, Error> = Framework::builder()
+        .options(FrameworkOptions {
+            commands: vec![cavegen_register(), pspspsps(), cavegen(), caveinfo()],
+            prefix_options: PrefixFrameworkOptions {
+                prefix: Some("!".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .token(token)
+        .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
+        .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }));
 
-    client.start().await?;
+    framework.run().await?;
 
     Ok(())
 }
 
-#[group]
-#[commands(cavegen, caveinfo, pspspsps)]
-struct General;
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-    }
-}
-
-/// Cooldown timer for commands that call into Cavegen.
-/// Prevents spam and avoids overloading the host machine.
-pub struct CooldownTimer;
-impl TypeMapKey for CooldownTimer {
-    type Value = Arc<RwLock<[SystemTime; NUM_TRACKED_COOLDOWNS]>>;
-}
-
-#[hook]
-async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
-    let can_run = check_cooldown(ctx, msg).await;
-
-    if can_run {
-        println!(
-            "Received command '{}' invoked by '{}'",
-            command_name,
-            msg.author.tag()
-        );
+/// Generates a sublevel layout image.
+#[command(prefix_command, slash_command, user_cooldown = 3)]
+async fn cavegen(
+    ctx: Context<'_>,
+    #[description = "A sublevel specifier. Examples: `scx1`, `SH-4`, `\"Dream Den 10\"`"] sublevel: String,
+    #[description = "8-digit hexadecimal number. Not case sensitive. '0x' is optional."] seed: String,
+) -> Result<(), Error> 
+{
+    let sublevel: Sublevel = sublevel.as_str().try_into()?;
+    let caveinfo = caveripper::assets::ASSETS.get_caveinfo(&sublevel)?;
+    let seed = if seed.eq_ignore_ascii_case("random") {
+        rand::random()
     } else {
-        msg.channel_id
-            .say(
-                &ctx.http,
-                format!(
-                    ":x: !{} was run too recently. Please wait a while before trying again!",
-                    command_name
-                ),
-            )
-            .await
-            .unwrap();
-    }
+        parse_seed(&seed)?
+    };
 
-    can_run
-}
+    // Append a random number to the filename to prevent race conditions
+    // when the same command is invoked multiple times in rapid succession.
+    let uuid: u32 = rand::random(); 
+    let filename = PathBuf::from(format!("output/{}_{:#010X}_{}.png", sublevel.short_name(), seed, uuid));
 
-#[command]
-async fn cavegen(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let args = extract_standard_args(args);
+    // A sub scope is necessary because Layout currently does not implement
+    // Send due to use of Rc.
+    let layout_image = {
+        let layout = Layout::generate(seed, &caveinfo);
+        render_layout(&layout, &RenderOptions {
+            quickglance: true,
+            ..Default::default()
+        })
+    }?;
 
-    if args.get("help").is_some() {
-        msg.channel_id.say(
-            &ctx.http,
-            "**Usage: `!cavegen <cave specifier> <seed> [optional arguments]`.**\n\
-            Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., challenge mode sublevels: \"CH3-1\" (the dash is required), \
-            or the word \"colossal\" to generate a CC layout.\n\
-            Seeds must start with `0x`: `0x1234abcd`.\n\
-            Include `+score` in your message to draw score related info.\n\
-            Include `+paths` in your message to draw treasure carry paths.\n\
-            Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
-            Include `+251` in your message to generate Pikmin 251 caves.\n\
-            Include `+newyear` in your message to generate Pikmin 2: New Year caves.\n\
-            Include `+pretty` in your message to draw 'pretty' layout images."
-        ).await?;
-        return Ok(());
-    }
+    let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
+    save_image(&layout_image, &filename)?;
 
-    match run_cavegen(&args).await {
-        Ok(output_file) => {
-            msg.channel_id
-                .send_files(&ctx.http, vec![&output_file], |m| {
-                    m.content(format!(
-                        "{} {}",
-                        args.get("cave").unwrap(),
-                        args.get("seed").unwrap()
-                    ))
-                })
-                .await?;
-            update_cooldown(ctx).await;
-            cleanup_output(&output_file).await;
-        }
-        Err(err) => {
-            msg.channel_id.say(&ctx.http, err.to_string()).await?;
-            eprintln!("{:#?}", err);
-        }
-    }
+    ctx.send(|b| {
+        b
+            .content(format!("{} - `{:#010X}`", sublevel.long_name(), seed))
+            .attachment(AttachmentType::Path(&filename))
+    }).await?;
+
+    // Clean up afterwards
+    tokio::fs::remove_file(&filename).await?;
 
     Ok(())
 }
 
-#[command]
-async fn caveinfo(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let args = extract_standard_args(args);
+/// Shows a Caveinfo image.
+#[command(prefix_command, slash_command, user_cooldown = 3)]
+async fn caveinfo(
+    ctx: Context<'_>, 
+    #[description = "A sublevel specifier. Examples: `scx1`, `SH-4`, `\"Dream Den 10\"`"] sublevel: String
+) -> Result<(), Error> 
+{
+    let sublevel: Sublevel = sublevel.as_str().try_into()?;
+    let caveinfo = caveripper::assets::ASSETS.get_caveinfo(&sublevel)?;
 
-    if args.get("help").is_some() {
-        msg.channel_id.say(
-            &ctx.http,
-            "**Usage: `!caveinfo <cave specifier> [optional arguments]`.**\n\
-            Cave specifiers can be sublevels: \"SCx3\", \"BK4\", etc., or challenge mode sublevels: \"CH3-1\" (the dash is required).\n\
-            Waypoints and spawn points are drawn by default.\n\
-            Include `+jp` in your message to change to JP treasures. PAL doesn't work currently.\n\
-            Include `+251` in your message to show info for Pikmin 251 caves.\n\
-            Include `+newyear` in your message to show info for Pikmin 2: New Year caves."
-        ).await?;
-        return Ok(());
-    }
+    // Append a random number to the filename to prevent race conditions
+    // when the same command is invoked multiple times in rapid succession.
+    let uuid: u32 = rand::random(); 
+    let filename = PathBuf::from(format!("output/{}_caveinfo_{}.png", sublevel.short_name(), uuid));
+    let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
+    save_image(&render_caveinfo(&caveinfo, RenderOptions::default())?, &filename)?;
 
-    match run_caveinfo(&args).await {
-        Ok(output_file) => {
-            msg.channel_id
-                .send_files(&ctx.http, vec![&output_file], |m| {
-                    m.content(format!("Caveinfo for {}", args.get("cave").unwrap()))
-                })
-                .await?;
-            update_cooldown(ctx).await;
-            cleanup_output(&output_file).await;
-        }
-        Err(err) => {
-            msg.channel_id.say(&ctx.http, err.to_string()).await?;
-            eprintln!("{:#?}", err);
-        }
-    }
+    ctx.send(|b| {
+        b.attachment(AttachmentType::Path(&filename))
+    }).await?;
+
+    // Clean up afterwards
+    tokio::fs::remove_file(&filename).await?;
 
     Ok(())
 }
 
-#[command]
-async fn pspspsps(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    if &format!("{}#{}", msg.author.name, msg.author.discriminator) == "chemical#7290" {
-        msg.channel_id.send_files(&ctx.http, vec![&PathBuf::from("./assets/fast_gbb.gif")], |m| m).await?;
+/// Test command
+#[command(prefix_command, slash_command, hide_in_help)]
+async fn pspspsps(ctx: Context<'_>) -> Result<(), Error> {
+    if &format!("{}#{}", ctx.author().name, ctx.author().discriminator) == "chemical#7290" {
+        let path = PathBuf::from("./assets/fast_gbb.gif");
+        ctx.send(|b| {
+            b.attachment(AttachmentType::Path(&path))
+        }).await?;
     }
     Ok(())
+}
+
+/// Must be run to register slash commands.
+/// Only usable by bot owner, but admin check is put in place for safety anyway.
+#[command(prefix_command, required_permissions = "ADMINISTRATOR", hide_in_help)]
+async fn cavegen_register(ctx: Context<'_>) -> Result<(), Error> {
+    Ok(register_application_commands_buttons(ctx).await?)
 }
