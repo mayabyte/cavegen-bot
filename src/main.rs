@@ -14,6 +14,7 @@ use caveripper::{
     search::find_matching_layouts_parallel, 
     assets::AssetManager
 };
+use log::{LevelFilter, info};
 use poise::{
     Framework, 
     FrameworkOptions, 
@@ -24,11 +25,17 @@ use poise::{
     command, 
     FrameworkBuilder, 
     PrefixFrameworkOptions, 
-    samples::register_application_commands_buttons
+    samples::{register_application_commands_buttons}
 };
-use rayon::ThreadPoolBuilder;
+use rayon::{ThreadPoolBuilder, prelude::{IntoParallelIterator, ParallelIterator}};
+use simple_logger::SimpleLogger;
 use tokio::task::spawn_blocking;
-use std::{path::PathBuf, convert::{TryInto, TryFrom}, time::{Duration, Instant}, collections::HashSet};
+use std::{
+    path::PathBuf, 
+    convert::{TryInto, TryFrom}, 
+    time::{Duration, Instant}, 
+    collections::HashSet
+};
 
 struct Data {}
 
@@ -37,7 +44,14 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let token = tokio::fs::read_to_string("discord_token.txt").await?.trim().to_string();
+    SimpleLogger::new()
+        .with_level(LevelFilter::Info)
+        .with_module_level("tracing", LevelFilter::Off)
+        .with_module_level("serenity", LevelFilter::Off)
+        .init()?;
+
+    let token = tokio::fs::read_to_string("discord_token.txt").await?
+        .trim().to_string();
 
     let framework: FrameworkBuilder<_, Error> = Framework::builder()
         .options(FrameworkOptions {
@@ -46,7 +60,8 @@ async fn main() -> Result<(), Error> {
                 pspspsps(), 
                 cavegen(), 
                 caveinfo(), 
-                cavesearch()
+                cavesearch(),
+                cavestats(),
             ],
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some("!".to_string()),
@@ -61,8 +76,10 @@ async fn main() -> Result<(), Error> {
     ThreadPoolBuilder::new().num_threads(8).build_global()?;
     AssetManager::init_global("caveripper_assets", ".")?;
 
+    info!("Cavegen Bot started.");
     framework.run().await?;
 
+    info!("Cavegen Bot shutting down.");
     Ok(())
 }
 
@@ -76,6 +93,8 @@ async fn cavegen(
     #[description = "Draw map unit grid lines."] #[flag] draw_grid: bool,
 ) -> Result<(), Error> 
 {
+    info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
+
     let sublevel: Sublevel = sublevel.as_str().try_into()?;
     let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
     let seed = if seed.eq_ignore_ascii_case("random") {
@@ -122,9 +141,11 @@ async fn cavegen(
 #[command(slash_command, user_cooldown = 3)]
 async fn caveinfo(
     ctx: Context<'_>, 
-    #[description = "A sublevel specifier. Examples: `scx1`, `SH-4`, `\"Dream Den 10\"`"] sublevel: String,
+    #[description = "A sublevel specifier. Examples: `scx1`, `\"Dream Den 10\"`, `ch-cos2`, `newyear:sk1`"] sublevel: String,
 ) -> Result<(), Error> 
 {
+    info!("Received command `caveinfo {sublevel}` from user {}", ctx.author());
+
     let sublevel: Sublevel = sublevel.as_str().try_into()?;
     let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
 
@@ -156,13 +177,15 @@ async fn caveinfo(
 }
 
 /// Search for a layout matching a condition
-#[command(slash_command, user_cooldown = 10, broadcast_typing)]
+#[command(prefix_command, user_cooldown = 10, broadcast_typing)]
 async fn cavesearch(
     ctx: Context<'_>,
-    #[description = "A query string. See Caveripper for details."] query: String,
+    #[description = "A query string. See Caveripper for details."] #[rest] query: String,
 ) -> Result<(), Error>
 {
-    let query = Query::try_from(query.as_str())?;
+    info!("Received command `cavesearch {query}` from user {}", ctx.author());
+
+    let query = Query::try_from(query.trim_matches('"'))?;
 
     // Apply the query clauses in sequence, using the result of the previous one's
     // search as the seed source for the following one.
@@ -217,6 +240,34 @@ async fn cavesearch(
     else {
         ctx.say(format!("Couldn't find matching seed in 10s for query \"{}\".", query)).await?;
     }
+
+    Ok(())
+}
+
+/// Finds the percentage of seeds that match the given query
+#[command(prefix_command, user_cooldown = 10, broadcast_typing)]
+async fn cavestats(
+    ctx: Context<'_>,
+    #[description = "A query string. See Caveripper for details."] #[rest] query: String,
+) -> Result<(), Error> 
+{
+    info!("Received command `cavestats {query}` from user {}", ctx.author());
+
+    let query = Query::try_from(query.trim_matches('"'))?;
+    let num_to_search = 10_000;
+
+    let query2 = query.clone();
+    let num_matched = spawn_blocking(move ||
+        (0..num_to_search).into_par_iter()
+            .filter(|_| {
+                let seed: u32 = rand::random();
+                query2.matches(seed)
+            })
+            .count()
+    ).await?;
+
+    let percent_matched = (num_matched as f64 / num_to_search as f64) * 100.0;
+    ctx.say(format!("**{percent_matched}%** ({num_matched}/{num_to_search}) of checked seeds matched the condition \"{query}\"")).await?;
 
     Ok(())
 }

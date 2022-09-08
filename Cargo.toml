@@ -13,3 +13,5 @@ poise = "0.3"
 caveripper = { git = "https://github.com/mayabyte/caveripper" }
 rand = "0.8"
 rayon = "1.5"
+simple_logger = "2.3"
+log = "0.4"
