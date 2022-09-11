@@ -187,11 +187,6 @@ async fn cavesearch(
 
     let query = Query::try_from(query.trim_matches('"'))?;
 
-    // Preload Caveinfo to avoid a known parallelism bug 
-    for sublevel in query.clauses.iter().map(|clause| &clause.sublevel) {
-        AssetManager::get_caveinfo(sublevel)?;
-    }
-
     // Apply the query clauses in sequence, using the result of the previous one's
     // search as the seed source for the following one.
     let query2 = query.clone();
@@ -260,11 +255,6 @@ async fn cavestats(
 
     let query = Query::try_from(query.trim_matches('"'))?;
     let num_to_search = 10_000;
-
-    // Preload Caveinfo to avoid a known parallelism bug 
-    for sublevel in query.clauses.iter().map(|clause| &clause.sublevel) {
-        AssetManager::get_caveinfo(sublevel)?;
-    }
 
     let query2 = query.clone();
     let num_matched = spawn_blocking(move ||

@@ -148,7 +148,7 @@ dependencies = [
 [[package]]
 name = "caveripper"
 version = "0.1.0"
-source = "git+https://github.com/mayabyte/caveripper#56566683aa89ff205506f00461e7e5eeffe26dfd"
+source = "git+https://github.com/mayabyte/caveripper#894f9ffa0e6a258fb6142ca5bfc17c16b8d6d98a"
 dependencies = [
  "clap",
  "crossbeam",
