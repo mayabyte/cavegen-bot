@@ -148,7 +148,7 @@ dependencies = [
 [[package]]
 name = "caveripper"
 version = "0.1.0"
-source = "git+https://github.com/mayabyte/caveripper#9d1d65115c9e2cfb32160b93ee2e2bec973b248b"
+source = "git+https://github.com/mayabyte/caveripper#f2c1a52947a22cfb5c9fe7dfce16abc306135909"
 dependencies = [
  "clap",
  "crossbeam",
@@ -458,9 +458,9 @@ dependencies = [
 
 [[package]]
 name = "exr"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78c26a90d9dd411a3d119d6f55752fb4c134ca243250c32fb9cab7b2561638d2"
+checksum = "c9a7880199e74c6d3fe45579df2f436c5913a71405494cb89d59234d86b47dc5"
 dependencies = [
  "bit_field",
  "flume",
