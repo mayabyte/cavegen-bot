@@ -73,7 +73,7 @@ async fn main() -> Result<(), Error> {
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
         .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }));
 
-    ThreadPoolBuilder::new().num_threads(8).build_global()?;
+    ThreadPoolBuilder::new().num_threads(16).build_global()?;
     AssetManager::init_global("caveripper_assets", ".")?;
 
     info!("Cavegen Bot started.");
@@ -190,13 +190,7 @@ async fn cavesearch(
     // Apply the query clauses in sequence, using the result of the previous one's
     // search as the seed source for the following one.
     let query2 = query.clone();
-    let result_recv = spawn_blocking(move || {
-        query2.clauses.iter().enumerate().fold(None, |recv, (i, clause)| {
-            let num = (i == query2.clauses.len()).then_some(1);
-            Some(find_matching_layouts_parallel(clause, Some(Instant::now() + Duration::from_secs(10)), num, recv, None))
-        })
-        .unwrap()
-    }).await?;
+    let result_recv = spawn_blocking(move || find_matching_layouts_parallel(&query2, Some(Instant::now() + Duration::from_secs(10)), None, None)).await?;
 
     if let Ok(seed) = result_recv.recv_timeout(Duration::from_secs(10)) {
         let sublevels_in_query: HashSet<&Sublevel> = query.clauses.iter()
