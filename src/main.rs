@@ -9,7 +9,7 @@ use caveripper::{
         save_image,
         render_layout
     },
-    query::Query,
+    query::{Query, QUERY_HELP},
     search::find_matching_layouts_parallel,
     assets::AssetManager
 };
@@ -59,6 +59,7 @@ async fn main() -> Result<(), Error> {
                 pspspsps(),
                 cavegen(),
                 caveinfo(),
+                cavegen_query_help(),
                 caveinfo_text(),
                 cavesearch(),
                 cavestats(),
@@ -190,6 +191,15 @@ async fn caveinfo_text(
     let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
     ctx.say(format!("{}", caveinfo)).await?;
 
+    Ok(())
+}
+
+/// Shows a detailed help message for Caveripper's query language. Only visible to you.
+#[command(slash_command, user_cooldown = 1)]
+async fn cavegen_query_help(ctx: Context<'_>) -> Result<(), Error> {
+    info!("Received command `cavegen_query_help` from user {}", ctx.author());
+    ctx.defer_ephemeral().await?;
+    ctx.say(QUERY_HELP).await?;
     Ok(())
 }
 
