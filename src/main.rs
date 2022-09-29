@@ -1,39 +1,38 @@
 use caveripper::{
-    parse_seed, 
-    sublevel::Sublevel, 
-    layout::{
-        render::{
-            render_caveinfo, 
-            LayoutRenderOptions,
-            CaveinfoRenderOptions, 
-            save_image, 
-            render_layout
-        }, Layout
-    }, 
-    query::Query, 
-    search::find_matching_layouts_parallel, 
+    parse_seed,
+    sublevel::Sublevel,
+    layout::Layout,
+    render::{
+        render_caveinfo,
+        LayoutRenderOptions,
+        CaveinfoRenderOptions,
+        save_image,
+        render_layout
+    },
+    query::Query,
+    search::find_matching_layouts_parallel,
     assets::AssetManager
 };
 use log::{LevelFilter, info};
 use poise::{
-    Framework, 
-    FrameworkOptions, 
+    Framework,
+    FrameworkOptions,
     serenity_prelude::{
-        GatewayIntents, 
+        GatewayIntents,
         AttachmentType
-    }, 
-    command, 
-    FrameworkBuilder, 
-    PrefixFrameworkOptions, 
+    },
+    command,
+    FrameworkBuilder,
+    PrefixFrameworkOptions,
     samples::{register_application_commands_buttons}
 };
 use rayon::{ThreadPoolBuilder, prelude::{IntoParallelIterator, ParallelIterator}};
 use simple_logger::SimpleLogger;
 use tokio::task::spawn_blocking;
 use std::{
-    path::PathBuf, 
-    convert::{TryInto, TryFrom}, 
-    time::{Duration, Instant}, 
+    path::PathBuf,
+    convert::{TryInto, TryFrom},
+    time::{Duration, Instant},
     collections::HashSet
 };
 
@@ -56,10 +55,11 @@ async fn main() -> Result<(), Error> {
     let framework: FrameworkBuilder<_, Error> = Framework::builder()
         .options(FrameworkOptions {
             commands: vec![
-                cavegen_register(), 
-                pspspsps(), 
-                cavegen(), 
-                caveinfo(), 
+                cavegen_register(),
+                pspspsps(),
+                cavegen(),
+                caveinfo(),
+                caveinfo_text(),
                 cavesearch(),
                 cavestats(),
             ],
@@ -91,7 +91,7 @@ async fn cavegen(
     #[description = "8-digit hexadecimal number. Not case sensitive. '0x' is optional."] seed: String,
     #[description = "Draw circles indicating gauge activation range."] #[flag] draw_gauge_range: bool,
     #[description = "Draw map unit grid lines."] #[flag] draw_grid: bool,
-) -> Result<(), Error> 
+) -> Result<(), Error>
 {
     info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
 
@@ -105,7 +105,7 @@ async fn cavegen(
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
-    let uuid: u32 = rand::random(); 
+    let uuid: u32 = rand::random();
     let filename = PathBuf::from(format!("output/{}_{:#010X}_{}.png", sublevel.short_name(), seed, uuid));
 
     // A sub scope is necessary because Layout currently does not implement
@@ -113,7 +113,7 @@ async fn cavegen(
     let layout_image = {
         let layout = Layout::generate(seed, caveinfo);
         render_layout(
-            &layout, 
+            &layout,
             LayoutRenderOptions {
                 quickglance: true,
                 draw_gauge_range,
@@ -140,9 +140,9 @@ async fn cavegen(
 /// Shows a Caveinfo image.
 #[command(slash_command, user_cooldown = 3)]
 async fn caveinfo(
-    ctx: Context<'_>, 
+    ctx: Context<'_>,
     #[description = "A sublevel specifier. Examples: `scx1`, `\"Dream Den 10\"`, `ch-cos2`, `newyear:sk1`"] sublevel: String,
-) -> Result<(), Error> 
+) -> Result<(), Error>
 {
     info!("Received command `caveinfo {sublevel}` from user {}", ctx.author());
 
@@ -151,7 +151,7 @@ async fn caveinfo(
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
-    let uuid: u32 = rand::random(); 
+    let uuid: u32 = rand::random();
     let filename = PathBuf::from(format!("output/{}_caveinfo_{}.png", sublevel.short_name(), uuid));
     let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
     save_image(
@@ -176,14 +176,32 @@ async fn caveinfo(
     Ok(())
 }
 
+/// Shows a text-only caveinfo. Only visible to you.
+#[command(slash_command, user_cooldown = 1)]
+async fn caveinfo_text(
+    ctx: Context<'_>,
+    #[description = "A sublevel specifier. Examples: `scx1`, `\"Dream Den 10\"`, `ch-cos2`, `newyear:sk1`"] sublevel: String,
+) -> Result<(), Error>
+{
+    info!("Received command `caveinfo_text {sublevel}` from user {}", ctx.author());
+    ctx.defer_ephemeral().await?;
+
+    let sublevel: Sublevel = sublevel.as_str().try_into()?;
+    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
+    ctx.say(format!("{}", caveinfo)).await?;
+
+    Ok(())
+}
+
 /// Search for a layout matching a condition
-#[command(prefix_command, user_cooldown = 10, broadcast_typing)]
+#[command(slash_command, user_cooldown = 10)]
 async fn cavesearch(
     ctx: Context<'_>,
     #[description = "A query string. See Caveripper for details."] #[rest] query: String,
 ) -> Result<(), Error>
 {
     info!("Received command `cavesearch {query}` from user {}", ctx.author());
+    ctx.defer().await?;
 
     let query = Query::try_from(query.trim_matches('"'))?;
 
@@ -196,7 +214,7 @@ async fn cavesearch(
         let sublevels_in_query: HashSet<&Sublevel> = query.clauses.iter()
             .map(|clause| &clause.sublevel)
             .collect();
-            
+
         let uuid: u32 = rand::random();  // Collision prevention
         let mut filenames = Vec::new();
         for sublevel in sublevels_in_query.iter() {
@@ -204,7 +222,7 @@ async fn cavesearch(
             let layout_image = {
                 let layout = Layout::generate(seed, caveinfo);
                 render_layout(
-                    &layout, 
+                    &layout,
                     LayoutRenderOptions {
                         quickglance: true,
                         ..Default::default()
@@ -217,14 +235,15 @@ async fn cavesearch(
             filenames.push(filename);
         }
 
-        ctx.say(format!("Seed `{:#010X}` matches query \"{}\".", seed, query)).await?;
-        for (file, sublevel) in filenames.iter().zip(sublevels_in_query.iter()) {
-            ctx.send(|b| {
-                b.content(format!("{} - `{:#010X}`", sublevel.long_name(), seed));
+        ctx.send(|b| {
+            let mut content = format!("`{:#010X}`", seed);
+            for (file, sublevel) in filenames.iter().zip(sublevels_in_query.iter()) {
+                content.push_str(&format!(" - {}", sublevel.long_name()));
                 b.attachment(AttachmentType::Path(file));
-                b
-            }).await?;
-        }
+            }
+            b.content(content);
+            b
+        }).await?;
 
         // Clean up afterwards
         for file in filenames.iter() {
@@ -239,16 +258,17 @@ async fn cavesearch(
 }
 
 /// Finds the percentage of seeds that match the given query
-#[command(prefix_command, user_cooldown = 10, broadcast_typing)]
+#[command(slash_command, user_cooldown = 10)]
 async fn cavestats(
     ctx: Context<'_>,
     #[description = "A query string. See Caveripper for details."] #[rest] query: String,
-) -> Result<(), Error> 
+) -> Result<(), Error>
 {
     info!("Received command `cavestats {query}` from user {}", ctx.author());
+    ctx.defer().await?;
 
     let query = Query::try_from(query.trim_matches('"'))?;
-    let num_to_search = 10_000;
+    let num_to_search = 50_000;
 
     let query2 = query.clone();
     let num_matched = spawn_blocking(move ||
@@ -261,7 +281,7 @@ async fn cavestats(
     ).await?;
 
     let percent_matched = (num_matched as f64 / num_to_search as f64) * 100.0;
-    ctx.say(format!("**{percent_matched:.03}%** ({num_matched}/{num_to_search}) of checked seeds matched the condition \"{query}\"")).await?;
+    ctx.say(format!("**{percent_matched:.03}%** ({num_matched}/{num_to_search}) of layouts match \"{query}\"")).await?;
 
     Ok(())
 }
