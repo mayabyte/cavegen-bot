@@ -95,6 +95,7 @@ async fn cavegen(
 ) -> Result<(), Error>
 {
     info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
+    ctx.defer_ephemeral().await?; // Errors will only be visible to the command author
 
     let sublevel: Sublevel = sublevel.as_str().try_into()?;
     let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
@@ -126,6 +127,7 @@ async fn cavegen(
     let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
     save_image(&layout_image, &filename)?;
 
+    ctx.defer().await?;
     ctx.send(|b| {
         b
             .content(format!("{} - `{:#010X}`", sublevel.long_name(), seed))
@@ -146,6 +148,7 @@ async fn caveinfo(
 ) -> Result<(), Error>
 {
     info!("Received command `caveinfo {sublevel}` from user {}", ctx.author());
+    ctx.defer_ephemeral().await?; // Errors will only be visible to the command author
 
     let sublevel: Sublevel = sublevel.as_str().try_into()?;
     let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
@@ -167,6 +170,7 @@ async fn caveinfo(
         &filename
     )?;
 
+    ctx.defer().await?;
     ctx.send(|b| {
         b.attachment(AttachmentType::Path(&filename))
     }).await?;
@@ -204,14 +208,14 @@ async fn cavegen_query_help(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Search for a layout matching a condition
-#[command(slash_command, user_cooldown = 10)]
+#[command(slash_command, user_cooldown = 5)]
 async fn cavesearch(
     ctx: Context<'_>,
     #[description = "A query string. See Caveripper for details."] #[rest] query: String,
 ) -> Result<(), Error>
 {
     info!("Received command `cavesearch {query}` from user {}", ctx.author());
-    ctx.defer().await?;
+    ctx.defer_ephemeral().await?; // Errors will only be visible to the command author
 
     let query = Query::try_from(query.trim_matches('"'))?;
 
@@ -221,6 +225,7 @@ async fn cavesearch(
     let result_recv = spawn_blocking(move || find_matching_layouts_parallel(&query2, Some(Instant::now() + Duration::from_secs(10)), None, None)).await?;
 
     if let Ok(seed) = result_recv.recv_timeout(Duration::from_secs(10)) {
+        ctx.defer().await?;
         let sublevels_in_query: HashSet<&Sublevel> = query.clauses.iter()
             .map(|clause| &clause.sublevel)
             .collect();
@@ -268,17 +273,17 @@ async fn cavesearch(
 }
 
 /// Finds the percentage of seeds that match the given query
-#[command(slash_command, user_cooldown = 10)]
+#[command(slash_command, user_cooldown = 5)]
 async fn cavestats(
     ctx: Context<'_>,
     #[description = "A query string. See Caveripper for details."] #[rest] query: String,
 ) -> Result<(), Error>
 {
     info!("Received command `cavestats {query}` from user {}", ctx.author());
-    ctx.defer().await?;
+    ctx.defer_ephemeral().await?;  // Errors will only be visible to the command author
 
     let query = Query::try_from(query.trim_matches('"'))?;
-    let num_to_search = 50_000;
+    let num_to_search = 100_000;
 
     let query2 = query.clone();
     let num_matched = spawn_blocking(move ||
@@ -290,6 +295,7 @@ async fn cavestats(
             .count()
     ).await?;
 
+    ctx.defer().await?;
     let percent_matched = (num_matched as f64 / num_to_search as f64) * 100.0;
     ctx.say(format!("**{percent_matched:.03}%** ({num_matched}/{num_to_search}) of layouts match \"{query}\"")).await?;
 
