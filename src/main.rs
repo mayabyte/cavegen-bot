@@ -92,6 +92,7 @@ async fn cavegen(
     #[description = "8-digit hexadecimal number. Not case sensitive. '0x' is optional."] seed: String,
     #[description = "Draw circles indicating gauge activation range."] #[flag] draw_gauge_range: bool,
     #[description = "Draw map unit grid lines."] #[flag] draw_grid: bool,
+    #[description = "Draw score numbers for each map unit."] #[flag] draw_score: bool,
 ) -> Result<(), Error>
 {
     info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
@@ -120,6 +121,7 @@ async fn cavegen(
                 quickglance: true,
                 draw_gauge_range,
                 draw_grid,
+                draw_score,
             }
         )
     }?;
