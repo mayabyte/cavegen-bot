@@ -211,18 +211,31 @@ async fn cavegen_query_help(ctx: Context<'_>) -> Result<(), Error> {
 #[command(slash_command, user_cooldown = 5)]
 async fn cavesearch(
     ctx: Context<'_>,
-    #[description = "A query string. See Caveripper for details."] #[rest] query: String,
+    #[description = "A query string. See Caveripper for details."] query: String,
+    #[description = "Search sequentially from the given seed. Searches random seeds if not provided."] start_from: Option<String>,
 ) -> Result<(), Error>
 {
     info!("Received command `cavesearch {query}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
     let query = Query::try_from(query.trim_matches('"'))?;
+    let start_from = if let Some(s) = start_from {
+        Some(parse_seed(&s)?)
+    }
+    else { None };
 
     // Apply the query clauses in sequence, using the result of the previous one's
     // search as the seed source for the following one.
     let query2 = query.clone();
-    let result_recv = spawn_blocking(move || find_matching_layouts_parallel(&query2, Some(Instant::now() + Duration::from_secs(10)), None, None)).await?;
+    let result_recv = spawn_blocking(
+        move || find_matching_layouts_parallel(
+            &query2,
+            Some(Instant::now() + Duration::from_secs(10)),
+            None,
+            start_from,
+            None
+        )
+    ).await?;
 
     if let Ok(seed) = result_recv.recv_timeout(Duration::from_secs(10)) {
         let sublevels_in_query: HashSet<&Sublevel> = query.clauses.iter()
