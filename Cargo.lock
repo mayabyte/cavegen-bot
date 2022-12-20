@@ -134,7 +134,7 @@ checksum = "dfb24e866b15a1af2a1b663f10c6b6b8f397a84aadb828f12e5b289ec23a3a3c"
 
 [[package]]
 name = "cavegen_bot"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "caveripper",
  "log",
@@ -1244,9 +1244,9 @@ dependencies = [
 
 [[package]]
 name = "poise"
-version = "0.3.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6c01d22dcda434b0dfe956c60f6ac9b0352c4c2f4af852afb3155a971cd306d"
+checksum = "2ca787e4e516076de1995a83ee05fbdfed71d072ea0da3df018318db42a87803"
 dependencies = [
  "async-trait",
  "derivative",
@@ -1263,9 +1263,9 @@ dependencies = [
 
 [[package]]
 name = "poise_macros"
-version = "0.3.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52ff861b6a52ec47bc54eb17424c025feeb040e82836036276c25dda045a8a0c"
+checksum = "b80c1f4e04114527f9d41ed6bb31707a095276f51bb0aef3ca11f062b25a67c4"
 dependencies = [
  "darling",
  "proc-macro2",

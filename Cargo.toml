@@ -1,6 +1,6 @@
 [package]
 name = "cavegen_bot"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["mayabyte <mayahayden@protonmail.com>"]
 edition = "2018"
 
@@ -9,7 +9,7 @@ version = "1.20"
 features = ["macros", "rt-multi-thread"]
 
 [dependencies]
-poise = "0.3"
+poise = "0.5"
 caveripper = { git = "https://github.com/mayabyte/caveripper" }
 rand = "0.8"
 rayon = "1.5"

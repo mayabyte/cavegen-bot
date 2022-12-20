@@ -19,12 +19,12 @@ use poise::{
     FrameworkOptions,
     serenity_prelude::{
         GatewayIntents,
-        AttachmentType
+        AttachmentType, self, FutureExt
     },
     command,
     FrameworkBuilder,
     PrefixFrameworkOptions,
-    samples::{register_application_commands_buttons}
+    samples::{register_application_commands_buttons}, Event, FrameworkContext, BoxFuture
 };
 use rayon::{ThreadPoolBuilder, prelude::{IntoParallelIterator, ParallelIterator}};
 use simple_logger::SimpleLogger;
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Error> {
     let token = tokio::fs::read_to_string("discord_token.txt").await?
         .trim().to_string();
 
-    let framework: FrameworkBuilder<_, Error> = Framework::builder()
+    let framework: FrameworkBuilder<Data, Error> = Framework::builder()
         .options(FrameworkOptions {
             commands: vec![
                 cavegen_register(),
@@ -68,11 +68,14 @@ async fn main() -> Result<(), Error> {
                 prefix: Some("!".to_string()),
                 ..Default::default()
             },
+            event_handler,
             ..Default::default()
         })
         .token(token)
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
-        .user_data_setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data {}) }));
+        .setup(move |_ctx, _ready, _framework| {
+            Box::pin(async move { Ok(Data {}) })
+        });
 
     ThreadPoolBuilder::new().num_threads(16).build_global()?;
     AssetManager::init_global("caveripper_assets", ".")?;
@@ -82,6 +85,31 @@ async fn main() -> Result<(), Error> {
 
     info!("Cavegen Bot shutting down.");
     Ok(())
+}
+
+fn event_handler<'a>(
+    ctx: &'a serenity_prelude::Context,
+    event: &'a Event<'a>,
+    _framework_context: FrameworkContext<'a, Data, Error>,
+    _data: &'a Data
+) -> BoxFuture<'a, Result<(), Error>>
+{
+    async move {
+        match event {
+            Event::ReactionAdd { add_reaction } => {
+                // Allow deletion of messages via a special reaction
+                if add_reaction.emoji.unicode_eq("❌") {
+                    let message = add_reaction.message(ctx.http.clone()).await?;
+                    if add_reaction.user_id.zip(message.interaction.map(|itx| itx.user.id)).map(|(a, b)| a == b).unwrap_or(false) {
+                        info!("Deleting message {} due to reaction by user", message.id);
+                        add_reaction.message(ctx.http.clone()).await?.delete(ctx).await?;
+                    }
+                }
+                Ok(())
+            },
+            _ => Ok(())
+        }
+    }.boxed()
 }
 
 /// Generates a sublevel layout image.
