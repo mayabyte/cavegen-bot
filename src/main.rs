@@ -1,5 +1,3 @@
-#![feature(try_trait_v2)]
-
 use caveripper::{
     parse_seed,
     sublevel::Sublevel,
@@ -131,16 +129,12 @@ async fn cavegen(
 
     let sublevel: Sublevel = sublevel.as_str().try_into().map_err(|e: Report<_>| format!("{e}"))?;
     let caveinfo = AssetManager::get_caveinfo(&sublevel).map_err(|e: Report<_>| format!("{e}"))?;
-    let seed = if seed.eq_ignore_ascii_case("random") {
-        rand::random()
-    } else {
-        parse_seed(&seed).map_err(|e: Report<_>| format!("{e}"))?
-    };
+    let seed = parse_seed(&seed).map_err(|e: Report<_>| format!("{e}"))?;
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
     let uuid: u32 = rand::random();
-    let filename = PathBuf::from(format!("output/{}_{:#010X}_{}.png", sublevel.short_name(), seed, uuid));
+    let filename = PathBuf::from(format!("output/{}_{}_{:#010X}_{}.png", caveinfo.cave_cfg.game, sublevel.short_name(), seed, uuid));
 
     // A sub scope is necessary because Layout currently does not implement
     // Send due to use of Rc.
@@ -188,7 +182,7 @@ async fn caveinfo(
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
     let uuid: u32 = rand::random();
-    let filename = PathBuf::from(format!("output/{}_caveinfo_{}.png", sublevel.short_name(), uuid));
+    let filename = PathBuf::from(format!("output/{}_{}_caveinfo_{}.png", caveinfo.cave_cfg.game, sublevel.short_name(), uuid));
     let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
     save_image(
         &render_caveinfo(
@@ -287,7 +281,7 @@ async fn cavesearch(
                     }
                 )
             }.map_err(|e: Report<_>| format!("{e}"))?;
-            let filename = PathBuf::from(format!("output/{}_{:#010X}_{}.png", sublevel.short_name(), seed, uuid));
+            let filename = PathBuf::from(format!("output/{}_{}_{:#010X}_{}.png", caveinfo.cave_cfg.game, sublevel.short_name(), seed, uuid));
             let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
             save_image(&layout_image, &filename).map_err(|e: Report<_>| format!("{e}"))?;
             filenames.push(filename);

@@ -5,14 +5,14 @@ authors = ["mayabyte <mayahayden@protonmail.com>"]
 edition = "2018"
 
 [dependencies.tokio]
-version = "1.20"
+version = "1.23"
 features = ["macros", "rt-multi-thread"]
 
 [dependencies]
 poise = "0.5"
 caveripper = { git = "https://github.com/mayabyte/caveripper" }
 rand = "0.8"
-rayon = "1.5"
-simple_logger = "2.3"
+rayon = "1.6"
+simple_logger = "4.0"
 log = "0.4"
 error-stack = "0.2"
