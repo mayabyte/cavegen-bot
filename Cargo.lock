@@ -155,20 +155,23 @@ dependencies = [
 [[package]]
 name = "caveripper"
 version = "0.1.0"
-source = "git+https://github.com/mayabyte/caveripper#23e0b1a2775e4b3a5fe982177b2fe0fbc5b3fe5a"
+source = "git+https://github.com/mayabyte/caveripper#7d20a1944dce020139a5fd842959efc206f1f772"
 dependencies = [
  "clap",
  "crossbeam",
  "encoding_rs",
  "error-stack",
+ "float-ord",
  "fontdue",
  "image",
  "indicatif",
  "itertools",
  "log",
+ "num",
  "once_cell",
  "pest",
  "pest_derive",
+ "petgraph",
  "rand",
  "rayon",
  "regex",
@@ -568,6 +571,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixedbitset"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+
+[[package]]
 name = "flate2"
 version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -576,6 +585,12 @@ dependencies = [
  "crc32fast",
  "miniz_oxide",
 ]
+
+[[package]]
+name = "float-ord"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ce81f49ae8a0482e4c55ea62ebbd7e5a686af544c00b9d090bba3ff9be97b3d"
 
 [[package]]
 name = "flume"
@@ -1113,6 +1128,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ae39348c8bc5fbd7f40c727a9925f03517afd2ab27d46702108b6a7e5414c19"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1123,12 +1172,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-iter"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-rational"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
+ "num-bigint",
  "num-integer",
  "num-traits",
 ]
@@ -1268,6 +1329,16 @@ dependencies = [
  "once_cell",
  "pest",
  "sha1",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6d5014253a1331579ce62aa67443b4a658c5e7dd03d4bc6d302b94474888143"
+dependencies = [
+ "fixedbitset",
+ "indexmap",
 ]
 
 [[package]]
@@ -1905,9 +1976,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.23.0"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab6d665857cc6ca78d6e80303a02cea7a7851e85dfbd77cbdc09bd129f1ef46"
+checksum = "38a54aca0c15d014013256222ba0ebed095673f89345dd79119d912eb561b7a8"
 dependencies = [
  "autocfg",
  "bytes",

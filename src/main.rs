@@ -122,6 +122,7 @@ async fn cavegen(
     #[description = "Draw circles indicating gauge activation range."] #[flag] draw_gauge_range: bool,
     #[description = "Draw map unit grid lines."] #[flag] draw_grid: bool,
     #[description = "Draw score numbers for each map unit."] #[flag] draw_score: bool,
+    #[description = "Draw carrying waypoints."] #[flag] draw_waypoints: bool,
 ) -> Result<(), Error>
 {
     info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
@@ -147,6 +148,8 @@ async fn cavegen(
                 draw_gauge_range,
                 draw_grid,
                 draw_score,
+                draw_waypoints,
+                draw_paths: false, // TODO when this is implemented in Caveripper
             }
         )
     }.map_err(|e: Report<_>| format!("{e}"))?;
