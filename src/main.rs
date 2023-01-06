@@ -9,8 +9,7 @@ use caveripper::{
         save_image,
         render_layout
     },
-    query::{Query, QUERY_HELP},
-    search::find_matching_layouts_parallel,
+    query::{Query, QUERY_HELP, find_matching_layouts_parallel},
     assets::AssetManager
 };
 use error_stack::Report;
