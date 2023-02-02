@@ -12,7 +12,6 @@ use caveripper::{
     query::{Query, QUERY_HELP, find_matching_layouts_parallel},
     assets::AssetManager
 };
-use error_stack::Report;
 use log::{LevelFilter, info};
 use poise::{
     Framework,
@@ -35,6 +34,8 @@ use std::{
     time::{Duration, Instant},
     collections::HashSet
 };
+
+const COMMAND_TIMEOUT_S: u64 = 15;
 
 struct Data {}
 
@@ -77,8 +78,8 @@ async fn main() -> Result<(), Error> {
             Box::pin(async move { Ok(Data {}) })
         });
 
-    ThreadPoolBuilder::new().num_threads(16).build_global()?;
-    AssetManager::init_global("caveripper_assets", ".").map_err(|e: Report<_>| format!("{e}"))?;
+    ThreadPoolBuilder::new().build_global()?;
+    AssetManager::init_global("caveripper_assets", ".")?;
 
     info!("Cavegen Bot started.");
     framework.run().await?;
@@ -127,9 +128,9 @@ async fn cavegen(
     info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let sublevel: Sublevel = sublevel.as_str().try_into().map_err(|e: Report<_>| format!("{e}"))?;
-    let caveinfo = AssetManager::get_caveinfo(&sublevel).map_err(|e: Report<_>| format!("{e}"))?;
-    let seed = parse_seed(&seed).map_err(|e: Report<_>| format!("{e}"))?;
+    let sublevel: Sublevel = sublevel.as_str().try_into()?;
+    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
+    let seed = parse_seed(&seed)?;
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
@@ -151,10 +152,10 @@ async fn cavegen(
                 draw_paths: false, // TODO when this is implemented in Caveripper
             }
         )
-    }.map_err(|e: Report<_>| format!("{e}"))?;
+    }?;
 
     let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
-    save_image(&layout_image, &filename).map_err(|e: Report<_>| format!("{e}"))?;
+    save_image(&layout_image, &filename)?;
 
     ctx.send(|b| {
         b
@@ -178,8 +179,8 @@ async fn caveinfo(
     info!("Received command `caveinfo {sublevel}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let sublevel: Sublevel = sublevel.as_str().try_into().map_err(|e: Report<_>| format!("{e}"))?;
-    let caveinfo = AssetManager::get_caveinfo(&sublevel).map_err(|e: Report<_>| format!("{e}"))?;
+    let sublevel: Sublevel = sublevel.as_str().try_into()?;
+    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
@@ -194,9 +195,9 @@ async fn caveinfo(
                 draw_waypoint_distances: true,
                 draw_waypoints: true,
             }
-        ).map_err(|e: Report<_>| format!("{e}"))?,
+        )?,
         &filename
-    ).map_err(|e: Report<_>| format!("{e}"))?;
+    )?;
 
     ctx.send(|b| {
         b.attachment(AttachmentType::Path(&filename))
@@ -218,8 +219,8 @@ async fn caveinfo_text(
     info!("Received command `caveinfo_text {sublevel}` from user {}", ctx.author());
     ctx.defer_ephemeral().await?;
 
-    let sublevel: Sublevel = sublevel.as_str().try_into().map_err(|e: Report<_>| format!("{e}"))?;
-    let caveinfo = AssetManager::get_caveinfo(&sublevel).map_err(|e: Report<_>| format!("{e}"))?;
+    let sublevel: Sublevel = sublevel.as_str().try_into()?;
+    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
     ctx.say(format!("{caveinfo}")).await?;
 
     Ok(())
@@ -245,9 +246,9 @@ async fn cavesearch(
     info!("Received command `cavesearch {query}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let query = Query::try_from(query.trim_matches('"')).map_err(|e: Report<_>| format!("{e}"))?;
+    let query = Query::try_from(query.trim_matches('"'))?;
     let start_from = if let Some(s) = start_from {
-        Some(parse_seed(&s).map_err(|e: Report<_>| format!("{e}"))?)
+        Some(parse_seed(&s)?)
     }
     else { None };
 
@@ -257,14 +258,14 @@ async fn cavesearch(
     let result_recv = spawn_blocking(
         move || find_matching_layouts_parallel(
             &query2,
-            Some(Instant::now() + Duration::from_secs(10)),
+            Some(Instant::now() + Duration::from_secs(COMMAND_TIMEOUT_S)),
             None,
             start_from,
             None
         )
     ).await?;
 
-    if let Ok(seed) = result_recv.recv_timeout(Duration::from_secs(10)) {
+    if let Ok(seed) = result_recv.recv_timeout(Duration::from_secs(COMMAND_TIMEOUT_S)) {
         let sublevels_in_query: HashSet<&Sublevel> = query.clauses.iter()
             .map(|clause| &clause.sublevel)
             .collect();
@@ -272,7 +273,7 @@ async fn cavesearch(
         let uuid: u32 = rand::random();  // Collision prevention
         let mut filenames = Vec::new();
         for sublevel in sublevels_in_query.iter() {
-            let caveinfo = AssetManager::get_caveinfo(sublevel).map_err(|e: Report<_>| format!("{e}"))?;
+            let caveinfo = AssetManager::get_caveinfo(sublevel)?;
             let layout_image = {
                 let layout = Layout::generate(seed, caveinfo);
                 render_layout(
@@ -282,10 +283,10 @@ async fn cavesearch(
                         ..Default::default()
                     }
                 )
-            }.map_err(|e: Report<_>| format!("{e}"))?;
+            }?;
             let filename = PathBuf::from(format!("output/{}_{}_{:#010X}_{}.png", caveinfo.cave_cfg.game, sublevel.short_name(), seed, uuid));
             let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
-            save_image(&layout_image, &filename).map_err(|e: Report<_>| format!("{e}"))?;
+            save_image(&layout_image, &filename)?;
             filenames.push(filename);
         }
 
@@ -321,7 +322,7 @@ async fn cavestats(
     info!("Received command `cavestats {query}` from user {}", ctx.author());
     ctx.defer().await?;  // Errors will only be visible to the command author
 
-    let query = Query::try_from(query.trim_matches('"')).map_err(|e: Report<_>| format!("{e}"))?;
+    let query = Query::try_from(query.trim_matches('"'))?;
     let num_to_search = 100_000;
 
     let query2 = query.clone();
