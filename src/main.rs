@@ -9,7 +9,7 @@ use caveripper::{
         save_image,
         render_layout
     },
-    query::{Query, QUERY_HELP, find_matching_layouts_parallel},
+    query::{Query, find_matching_layouts_parallel},
     assets::AssetManager
 };
 use log::{LevelFilter, info};
@@ -231,7 +231,7 @@ async fn caveinfo_text(
 async fn cavegen_query_help(ctx: Context<'_>) -> Result<(), Error> {
     info!("Received command `cavegen_query_help` from user {}", ctx.author());
     ctx.defer_ephemeral().await?;
-    ctx.say(QUERY_HELP).await?;
+    ctx.say("See https://github.com/mayabyte/caveripper/blob/main/QUERY.md for the query usage guide.").await?;
     Ok(())
 }
 
