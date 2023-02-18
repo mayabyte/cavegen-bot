@@ -1,13 +1,14 @@
+#![feature(deadline_api)]
+
 use caveripper::{
     parse_seed,
     sublevel::Sublevel,
     layout::Layout,
     render::{
-        render_caveinfo,
+        Renderer,
         LayoutRenderOptions,
         CaveinfoRenderOptions,
-        save_image,
-        render_layout
+        save_image
     },
     query::{Query, find_matching_layouts_parallel},
     assets::AssetManager
@@ -18,7 +19,7 @@ use poise::{
     FrameworkOptions,
     serenity_prelude::{
         GatewayIntents,
-        AttachmentType, self, FutureExt
+        AttachmentType, self, FutureExt,
     },
     command,
     FrameworkBuilder,
@@ -30,14 +31,15 @@ use simple_logger::SimpleLogger;
 use tokio::task::spawn_blocking;
 use std::{
     path::PathBuf,
-    convert::{TryInto, TryFrom},
     time::{Duration, Instant},
     collections::HashSet
 };
 
 const COMMAND_TIMEOUT_S: u64 = 15;
 
-struct Data {}
+struct Data {
+    mgr: &'static AssetManager,
+}
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -52,6 +54,12 @@ async fn main() -> Result<(), Error> {
 
     let token = tokio::fs::read_to_string("discord_token.txt").await?
         .trim().to_string();
+
+    // The asset manager is leaked because it will live for the entire duration of
+    // the bot's runtime and dealing with both async and multithreading for a non-
+    // static reference is a huge pain.
+    let asset_manager = Box::new(AssetManager::init()?);
+    let asset_manager: &'static mut AssetManager = Box::leak(asset_manager);
 
     let framework: FrameworkBuilder<Data, Error> = Framework::builder()
         .options(FrameworkOptions {
@@ -75,11 +83,10 @@ async fn main() -> Result<(), Error> {
         .token(token)
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
         .setup(move |_ctx, _ready, _framework| {
-            Box::pin(async move { Ok(Data {}) })
+            Box::pin(async move { Ok(Data { mgr: asset_manager }) })
         });
 
     ThreadPoolBuilder::new().build_global()?;
-    AssetManager::init_global("caveripper_assets", ".")?;
 
     info!("Cavegen Bot started.");
     framework.run().await?;
@@ -128,8 +135,10 @@ async fn cavegen(
     info!("Received command `cavegen {sublevel} {seed} {draw_gauge_range} {draw_grid}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let sublevel: Sublevel = sublevel.as_str().try_into()?;
-    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
+    let mgr = &ctx.data().mgr;
+    let renderer = Renderer::new(mgr);
+    let sublevel = Sublevel::try_from_str(sublevel.as_str(), mgr)?;
+    let caveinfo = mgr.get_caveinfo(&sublevel)?;
     let seed = parse_seed(&seed)?;
 
     // Append a random number to the filename to prevent race conditions
@@ -141,7 +150,7 @@ async fn cavegen(
     // Send due to use of Rc.
     let layout_image = {
         let layout = Layout::generate(seed, caveinfo);
-        render_layout(
+        renderer.render_layout(
             &layout,
             LayoutRenderOptions {
                 quickglance: true,
@@ -179,8 +188,10 @@ async fn caveinfo(
     info!("Received command `caveinfo {sublevel}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let sublevel: Sublevel = sublevel.as_str().try_into()?;
-    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
+    let mgr = &ctx.data().mgr;
+    let renderer = Renderer::new(mgr);
+    let sublevel = Sublevel::try_from_str(sublevel.as_str(), mgr)?;
+    let caveinfo = mgr.get_caveinfo(&sublevel)?;
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
@@ -188,7 +199,7 @@ async fn caveinfo(
     let filename = PathBuf::from(format!("output/{}_{}_caveinfo_{}.png", caveinfo.cave_cfg.game, sublevel.short_name(), uuid));
     let _ = tokio::fs::create_dir("output").await;  // Ensure output directory exists.
     save_image(
-        &render_caveinfo(
+        &renderer.render_caveinfo(
             caveinfo,
             CaveinfoRenderOptions {
                 draw_treasure_info: true,
@@ -219,8 +230,9 @@ async fn caveinfo_text(
     info!("Received command `caveinfo_text {sublevel}` from user {}", ctx.author());
     ctx.defer_ephemeral().await?;
 
-    let sublevel: Sublevel = sublevel.as_str().try_into()?;
-    let caveinfo = AssetManager::get_caveinfo(&sublevel)?;
+    let mgr = &ctx.data().mgr;
+    let sublevel = Sublevel::try_from_str(sublevel.as_str(), mgr)?;
+    let caveinfo = mgr.get_caveinfo(&sublevel)?;
     ctx.say(format!("{caveinfo}")).await?;
 
     Ok(())
@@ -236,36 +248,43 @@ async fn cavegen_query_help(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Search for a layout matching a condition
-#[command(slash_command, user_cooldown = 5)]
+#[command(slash_command, user_cooldown = 3)]
 async fn cavesearch(
     ctx: Context<'_>,
     #[description = "A query string. See Caveripper for details."] query: String,
-    #[description = "Search sequentially from the given seed. Searches random seeds if not provided."] start_from: Option<String>,
 ) -> Result<(), Error>
 {
     info!("Received command `cavesearch {query}` from user {}", ctx.author());
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let query = Query::try_from(query.trim_matches('"'))?;
-    let start_from = if let Some(s) = start_from {
-        Some(parse_seed(&s)?)
-    }
-    else { None };
+    let mgr = ctx.data().mgr;
+    let renderer = Renderer::new(mgr);
+    let query = Query::try_parse(query.trim_matches('"'), mgr)?;
+    let deadline = Instant::now() + Duration::from_secs(COMMAND_TIMEOUT_S);
 
     // Apply the query clauses in sequence, using the result of the previous one's
     // search as the seed source for the following one.
     let query2 = query.clone();
-    let result_recv = spawn_blocking(
-        move || find_matching_layouts_parallel(
-            &query2,
-            Some(Instant::now() + Duration::from_secs(COMMAND_TIMEOUT_S)),
-            None,
-            start_from,
-            None
-        )
+    let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
+
+    spawn_blocking(
+        move || {
+            find_matching_layouts_parallel(
+                &query2,
+                mgr,
+                Some(deadline),
+                Some(1),
+                Some(|| {}),
+                |seed| {
+                    let _ = send.send(seed);
+                }
+            );
+        }
     ).await?;
 
-    if let Ok(seed) = result_recv.recv_timeout(Duration::from_secs(COMMAND_TIMEOUT_S)) {
+    // `send` is moved into the above closure and dropped when `find_matching_layouts_parallel`
+    // finishes, so this recv call will return None at that point due to the channel closing.
+    if let Some(seed) = recv.recv().await {
         let sublevels_in_query: HashSet<&Sublevel> = query.clauses.iter()
             .map(|clause| &clause.sublevel)
             .collect();
@@ -273,10 +292,10 @@ async fn cavesearch(
         let uuid: u32 = rand::random();  // Collision prevention
         let mut filenames = Vec::new();
         for sublevel in sublevels_in_query.iter() {
-            let caveinfo = AssetManager::get_caveinfo(sublevel)?;
+            let caveinfo = mgr.get_caveinfo(sublevel)?;
             let layout_image = {
                 let layout = Layout::generate(seed, caveinfo);
-                render_layout(
+                renderer.render_layout(
                     &layout,
                     LayoutRenderOptions {
                         quickglance: true,
@@ -306,14 +325,14 @@ async fn cavesearch(
         }
     }
     else {
-        ctx.say(format!("Couldn't find matching seed in 10s for query \"{query}\".")).await?;
+        ctx.say(format!("Couldn't find any seeds matching \"{query}\".")).await?;
     }
 
     Ok(())
 }
 
 /// Finds the percentage of seeds that match the given query
-#[command(slash_command, user_cooldown = 5)]
+#[command(slash_command, user_cooldown = 3)]
 async fn cavestats(
     ctx: Context<'_>,
     #[description = "A query string. See Caveripper for details."] #[rest] query: String,
@@ -322,7 +341,8 @@ async fn cavestats(
     info!("Received command `cavestats {query}` from user {}", ctx.author());
     ctx.defer().await?;  // Errors will only be visible to the command author
 
-    let query = Query::try_from(query.trim_matches('"'))?;
+    let mgr = ctx.data().mgr;
+    let query = Query::try_parse(query.trim_matches('"'), mgr)?;
     let num_to_search = 100_000;
 
     let query2 = query.clone();
@@ -330,13 +350,13 @@ async fn cavestats(
         (0..num_to_search).into_par_iter()
             .filter(|_| {
                 let seed: u32 = rand::random();
-                query2.matches(seed)
+                query2.matches(seed, mgr)
             })
             .count()
     ).await?;
 
     let percent_matched = (num_matched as f64 / num_to_search as f64) * 100.0;
-    ctx.say(format!("**{percent_matched:.03}%** ({num_matched}/{num_to_search}) of layouts match \"{query}\"")).await?;
+    ctx.say(format!("**{percent_matched:.03}%** of layouts match \"{query}\"")).await?;
 
     Ok(())
 }
