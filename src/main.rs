@@ -159,6 +159,7 @@ async fn cavegen(
                 draw_score,
                 draw_waypoints,
                 draw_paths: false, // TODO when this is implemented in Caveripper
+                draw_comedown_square: false, // TODO
             }
         )
     }?;
