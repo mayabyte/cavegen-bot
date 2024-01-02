@@ -446,5 +446,11 @@ async fn pspspsps(ctx: Context<'_>) -> Result<(), Error> {
 /// Only usable by bot owner, but admin check is put in place for safety anyway.
 #[command(prefix_command, required_permissions = "ADMINISTRATOR", hide_in_help)]
 async fn cavegen_register(ctx: Context<'_>) -> Result<(), Error> {
+    if cfg!(debug_assertions) {
+        ctx.say("Cavegen Bot DEBUG").await?;
+    }
+    else {
+        ctx.say("Cavegen Bot PRODUCTION").await?;
+    }
     Ok(register_application_commands_buttons(ctx).await?)
 }
