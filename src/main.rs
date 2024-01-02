@@ -15,7 +15,7 @@ use log::{info, LevelFilter};
 use poise::{
     command,
     samples::register_application_commands_buttons,
-    serenity_prelude::{self, AttachmentType, FutureExt, GatewayIntents},
+    serenity_prelude::{self, AttachmentType, FutureExt, GatewayIntents, GuildId, UserId},
     BoxFuture, Event, Framework, FrameworkBuilder, FrameworkContext, FrameworkOptions,
     PrefixFrameworkOptions,
 };
@@ -61,6 +61,9 @@ async fn main() -> Result<(), Error> {
     let render_helper: &'static RenderHelper =
         Box::leak(Box::new(RenderHelper::new(asset_manager)));
 
+    let mut owners = HashSet::new();
+    owners.insert(UserId(94645807839457280));
+
     let framework: FrameworkBuilder<Data, Error> = Framework::builder()
         .options(FrameworkOptions {
             commands: vec![
@@ -78,6 +81,8 @@ async fn main() -> Result<(), Error> {
                 ..Default::default()
             },
             event_handler,
+            owners,
+            command_check: Some(debug_version_check),
             ..Default::default()
         })
         .token(token)
@@ -98,6 +103,17 @@ async fn main() -> Result<(), Error> {
 
     info!("Cavegen Bot shutting down.");
     Ok(())
+}
+
+fn debug_version_check<'a>(ctx: Context<'_>) -> BoxFuture<'_, Result<bool, Error>> {
+    async move {
+        let is_debug_server = ctx
+            .guild_id()
+            .map(|id| id == GuildId(824767720234942536))
+            .unwrap_or(false);
+        Ok(!(cfg!(debug_assertions) ^ is_debug_server))
+    }
+    .boxed()
 }
 
 fn event_handler<'a>(
@@ -448,8 +464,7 @@ async fn pspspsps(ctx: Context<'_>) -> Result<(), Error> {
 async fn cavegen_register(ctx: Context<'_>) -> Result<(), Error> {
     if cfg!(debug_assertions) {
         ctx.say("Cavegen Bot DEBUG").await?;
-    }
-    else {
+    } else {
         ctx.say("Cavegen Bot PRODUCTION").await?;
     }
     Ok(register_application_commands_buttons(ctx).await?)
