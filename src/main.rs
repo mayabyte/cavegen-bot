@@ -4,7 +4,7 @@ use caveripper::{
     assets::AssetManager,
     layout::Layout,
     parse_seed,
-    query::{find_matching_layouts_parallel, Query},
+    query::{find_matching_layouts_parallel, Query, StructuralQuery},
     render::{
         render_caveinfo, render_layout, save_image, CaveinfoRenderOptions, LayoutRenderOptions,
         RenderHelper,
@@ -327,7 +327,7 @@ async fn cavesearch(
     ctx.defer().await?; // Errors will only be visible to the command author
 
     let mgr = ctx.data().mgr;
-    let query = Query::try_parse(query.trim_matches('"'), mgr)?;
+    let query = StructuralQuery::try_parse(query.trim_matches('"'), mgr)?;
     let deadline = Instant::now() + Duration::from_secs(COMMAND_TIMEOUT_S);
 
     // Apply the query clauses in sequence, using the result of the previous one's
@@ -362,18 +362,17 @@ async fn cavesearch(
         let mut filenames = Vec::new();
         for sublevel in sublevels_in_query.iter() {
             let caveinfo = mgr.get_caveinfo(sublevel)?;
-            let layout_image =
-                {
-                    let layout = Layout::generate(seed, caveinfo);
-                    render_layout(
-                        &layout,
-                        &ctx.data().render_helper,
-                        LayoutRenderOptions {
-                            quickglance: true,
-                            ..Default::default()
-                        },
-                    )
-                }?;
+            let layout_image = {
+                let layout = Layout::generate(seed, caveinfo);
+                render_layout(
+                    &layout,
+                    &ctx.data().render_helper,
+                    LayoutRenderOptions {
+                        quickglance: true,
+                        ..Default::default()
+                    },
+                )
+            }?;
             let filename = PathBuf::from(format!(
                 "output/{}_{}_{:#010X}_{}.png",
                 caveinfo.cave_cfg.game,
@@ -424,25 +423,26 @@ async fn cavestats(
     ctx.defer().await?; // Errors will only be visible to the command author
 
     let mgr = ctx.data().mgr;
-    let query = Query::try_parse(query.trim_matches('"'), mgr)?;
+    let query = StructuralQuery::try_parse(query.trim_matches('"'), mgr)?;
     let num_to_search = 100_000;
 
     let query2 = query.clone();
-    let num_matched =
-        spawn_blocking(move || {
-            (0..num_to_search)
-                .into_par_iter()
-                .filter(|_| {
-                    let seed: u32 = rand::random();
-                    query2.matches(seed, mgr)
-                })
-                .count()
-        })
-        .await?;
+    let num_matched = spawn_blocking(move || {
+        (0..num_to_search)
+            .into_par_iter()
+            .filter(|_| {
+                let seed: u32 = rand::random();
+                query2.matches(seed, mgr)
+            })
+            .count()
+    })
+    .await?;
 
     let percent_matched = (num_matched as f64 / num_to_search as f64) * 100.0;
-    ctx.say(format!("**{percent_matched:.03}%** of layouts match \"{query}\""))
-        .await?;
+    ctx.say(format!(
+        "**{percent_matched:.03}%** of layouts match \"{query}\""
+    ))
+    .await?;
 
     Ok(())
 }
