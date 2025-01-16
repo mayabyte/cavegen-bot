@@ -1,7 +1,7 @@
 #![feature(deadline_api)]
 
 use caveripper::{
-    assets::AssetManager,
+    assets::{fs_asset_manager::FsAssetManager, AssetManager},
     layout::Layout,
     parse_seed,
     query::{find_matching_layouts_parallel, Query, StructuralQuery},
@@ -34,8 +34,8 @@ use tokio::task::spawn_blocking;
 const COMMAND_TIMEOUT_S: u64 = 15;
 
 struct Data {
-    mgr: &'static AssetManager,
-    render_helper: &'static RenderHelper<'static>,
+    mgr: &'static FsAssetManager,
+    render_helper: &'static RenderHelper<'static, FsAssetManager>,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -57,8 +57,8 @@ async fn main() -> Result<(), Error> {
     // The asset manager is leaked because it will live for the entire duration of
     // the bot's runtime and dealing with both async and multithreading for a non-
     // static reference is a huge pain.
-    let asset_manager: &'static AssetManager = Box::leak(Box::new(AssetManager::init()?));
-    let render_helper: &'static RenderHelper =
+    let asset_manager: &'static FsAssetManager = Box::leak(Box::new(FsAssetManager::init()?));
+    let render_helper: &'static RenderHelper<FsAssetManager> =
         Box::leak(Box::new(RenderHelper::new(asset_manager)));
 
     let mut owners = HashSet::new();
@@ -176,9 +176,9 @@ async fn cavegen(
     );
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let mgr = &ctx.data().mgr;
+    let mgr = ctx.data().mgr;
     let sublevel = Sublevel::try_from_str(sublevel.as_str(), mgr)?;
-    let caveinfo = mgr.get_caveinfo(&sublevel)?;
+    let caveinfo = mgr.load_caveinfo(&sublevel)?;
     let seed = parse_seed(&seed)?;
 
     // Append a random number to the filename to prevent race conditions
@@ -241,9 +241,9 @@ async fn caveinfo(
     );
     ctx.defer().await?; // Errors will only be visible to the command author
 
-    let mgr = &ctx.data().mgr;
+    let mgr = ctx.data().mgr;
     let sublevel = Sublevel::try_from_str(sublevel.as_str(), mgr)?;
-    let caveinfo = mgr.get_caveinfo(&sublevel)?;
+    let caveinfo = mgr.load_caveinfo(&sublevel)?;
 
     // Append a random number to the filename to prevent race conditions
     // when the same command is invoked multiple times in rapid succession.
@@ -291,9 +291,9 @@ async fn caveinfo_text(
     );
     ctx.defer_ephemeral().await?;
 
-    let mgr = &ctx.data().mgr;
+    let mgr = ctx.data().mgr;
     let sublevel = Sublevel::try_from_str(sublevel.as_str(), mgr)?;
-    let caveinfo = mgr.get_caveinfo(&sublevel)?;
+    let caveinfo = mgr.load_caveinfo(&sublevel)?;
     ctx.say(format!("{caveinfo}")).await?;
 
     Ok(())
@@ -361,7 +361,7 @@ async fn cavesearch(
         let uuid: u32 = rand::random(); // Collision prevention
         let mut filenames = Vec::new();
         for sublevel in sublevels_in_query.iter() {
-            let caveinfo = mgr.get_caveinfo(sublevel)?;
+            let caveinfo = mgr.load_caveinfo(sublevel)?;
             let layout_image = {
                 let layout = Layout::generate(seed, caveinfo);
                 render_layout(
